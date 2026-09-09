@@ -1,0 +1,30 @@
+// Configuracion basica de Grafana Alloy para monitorear el HOST (CPU, memoria, disco, red).
+//
+// Modelo de datos: a diferencia de ServerB (donde Prometheus hace PULL sobre /metrics),
+// aqui Alloy hace PUSH (remote_write) de las metricas del host hacia Prometheus en ServerA.
+// Por eso en ServerA/docker-compose.yml Prometheus corre con --web.enable-remote-write-receiver.
+//
+// Este archivo se copia a /etc/alloy/config.alloy por scripts/install-alloy.sh.
+// La URL de destino se toma de la variable de entorno PROMETHEUS_REMOTE_WRITE_URL
+// (ver README.md para el valor recomendado y las reglas de Security Group necesarias).
+
+// 1) Recolecta metricas de sistema operativo (equivalente a node_exporter integrado en Alloy).
+prometheus.exporter.unix "host" {
+  // Se dejan las colecciones por defecto (cpu, meminfo, diskstats, filesystem, netdev, etc).
+}
+
+// 2) "Scrapea" el exporter de arriba (esto ocurre localmente, dentro del propio Alloy)
+//    y reenvia las series al componente de remote_write.
+prometheus.scrape "host_metrics" {
+  targets         = prometheus.exporter.unix.host.targets
+  forward_to      = [prometheus.remote_write.to_serverA.receiver]
+  scrape_interval = "15s"
+}
+
+// 3) Envia (push) las metricas recolectadas hacia Prometheus en ServerA.
+prometheus.remote_write "to_serverA" {
+  endpoint {
+    // Ejemplo de valor: http://<IP_SERVERA>:9090/api/v1/write
+    url = env("PROMETHEUS_REMOTE_WRITE_URL")
+  }
+}

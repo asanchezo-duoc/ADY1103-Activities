@@ -1,0 +1,13 @@
+{
+  "name": "serverb-api",
+  "version": "1.0.0",
+  "description": "API de ejemplo a monitorear (Lab2.X-2). Expone /health y /metrics para Prometheus.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "prom-client": "^15.1.3"
+  }
+}

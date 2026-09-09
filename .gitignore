@@ -1,0 +1,11 @@
+# Dependencias y artefactos de build
+node_modules/
+npm-debug.log*
+
+# Variables de entorno reales (usar los .env.example como plantilla)
+.env
+.env.*
+!.env.example
+
+# Archivos de SO/editor
+.DS_Store

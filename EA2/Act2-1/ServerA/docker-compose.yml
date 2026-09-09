@@ -1,0 +1,70 @@
+# ServerA - Stack de monitoreo (Prometheus + Grafana)
+#
+# Prometheus hace "pull" (scraping) de metricas:
+#   - de si mismo
+#   - de ServerB (la API), puerto 8080, endpoint /metrics
+#   - de Grafana Alloy corriendo en el host (via remote_write, ver scripts/install-alloy.sh)
+#
+# Levantar el stack:
+#   cd ServerA
+#   cp .env.example .env   # y editar credenciales de Grafana
+#   docker compose up -d
+#
+# Grafana queda disponible en http://<IP_SERVERA>:3000
+# Prometheus queda disponible en http://<IP_SERVERA>:9090
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: serverA-prometheus
+    restart: unless-stopped
+    volumes:
+      # Config de scraping (targets: si mismo y ServerB)
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Volumen persistente para la data (TSDB) de Prometheus, sobrevive a docker compose down
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      # Habilita el endpoint de remote_write para que Grafana Alloy (instalado en el host
+      # con scripts/install-alloy.sh) pueda "empujar" (push) las metricas del host hacia aca.
+      - "--web.enable-remote-write-receiver"
+      - "--web.enable-lifecycle" # permite recargar config con POST /-/reload sin reiniciar el contenedor
+    ports:
+      # Puerto expuesto para la UI/API de Prometheus. En AWS, restringir este puerto
+      # en el Security Group solo a IPs de administracion (ver README.md).
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: serverA-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      # Variables de entorno recomendadas (ver .env.example / README.md).
+      # NUNCA dejar el usuario/clave por defecto en un ambiente real.
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      # Volumen persistente para dashboards, usuarios y configuracion de Grafana
+      - grafana_data:/var/lib/grafana
+      # Provisioning automatico: datasource de Prometheus ya queda configurado al levantar
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      # UI de Grafana. En AWS, restringir en el Security Group a IPs de los alumnos/admin.
+      - "3000:3000"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  # Volumen persistente pedido por la rubrica: la data de Prometheus no se pierde
+  # al recrear el contenedor (docker compose down && docker compose up -d).
+  prometheus_data:
+  grafana_data:

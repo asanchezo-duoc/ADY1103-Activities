@@ -1,0 +1,34 @@
+# Configuracion de Prometheus (ServerA).
+# Prometheus trabaja por "pull": cada scrape_interval va y consulta el endpoint /metrics
+# de cada target de la lista de abajo.
+
+global:
+  scrape_interval: 15s # cada cuanto se hace scraping por defecto
+  evaluation_interval: 15s
+
+scrape_configs:
+  # 1) Prometheus se monitorea a si mismo
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 2) ServerB: la API a monitorear (docker corriendo localmente, puerto 8080).
+  #    IMPORTANTE PARA LOS ALUMNOS:
+  #    - Reemplazar "REEMPLAZAR_IP_O_HOST_SERVERB" por la IP/hostname donde corre ServerB.
+  #    - Si ServerA y ServerB corren en la MISMA maquina, se puede usar:
+  #        host.docker.internal:8080   (Docker Desktop en Mac/Windows)
+  #      o la IP del host en Linux (host.docker.internal requiere --add-host en Linux).
+  #    - Si estan en instancias EC2 distintas, usar la IP PRIVADA de ServerB y
+  #      revisar que el Security Group de ServerB permita el puerto 8080 desde ServerA
+  #      (ver README.md, seccion de Security Groups).
+  - job_name: "serverB-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["REEMPLAZAR_IP_O_HOST_SERVERB:8080"]
+        labels:
+          app: "serverB-api"
+
+  # 3) Host monitoreado por Grafana Alloy (metricas de sistema: CPU, memoria, disco, etc).
+  #    Alloy NO se scrapea aqui: usa remote_write para "empujar" sus metricas hacia este
+  #    Prometheus (por eso el flag --web.enable-remote-write-receiver en docker-compose.yml).
+  #    Ver scripts/install-alloy.sh y scripts/alloy-config.alloy.
