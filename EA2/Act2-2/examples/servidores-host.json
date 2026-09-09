@@ -104,7 +104,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[20m])) * 100)",
           "refId": "A"
         }
       ],
@@ -363,7 +363,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[5m])",
+          "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[20m])",
           "legendFormat": "rx {{device}}",
           "refId": "A"
         },
@@ -372,7 +372,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[5m])",
+          "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[20m])",
           "legendFormat": "tx {{device}}",
           "refId": "B"
         }

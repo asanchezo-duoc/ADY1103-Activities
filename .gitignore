@@ -9,8 +9,3 @@ npm-debug.log*
 
 # Archivos de SO/editor
 .DS_Store
-
-# Dashboards de referencia (respuestas) generados al validar la actividad EA2/Act2-2.
-# Se mantienen en disco como material de apoyo del profesor, pero NO se versionan para
-# no filtrar la solucion a quienes desarrollen la actividad desde cero.
-# EA2/Act2-2/examples/ -> user: saqué del ignore sirven de ejemplo, y no son respuestas en si

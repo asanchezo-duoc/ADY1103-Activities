@@ -73,7 +73,7 @@
       "id": 2,
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"serverB-api\"}[1m])) by (route)",
+          "expr": "sum(rate(http_requests_total{job=\"serverB-api\"}[20m])) by (route)",
           "legendFormat": "{{route}}",
           "refId": "A"
         }
@@ -115,7 +115,7 @@
       "id": 3,
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"serverB-api\", status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"serverB-api\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{job=\"serverB-api\", status_code=~\"5..\"}[20m])) / sum(rate(http_requests_total{job=\"serverB-api\"}[20m]))",
           "legendFormat": "error rate",
           "refId": "A"
         }
@@ -148,7 +148,7 @@
       "id": 4,
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"serverB-api\"}[1m])) by (status_code)",
+          "expr": "sum(rate(http_requests_total{job=\"serverB-api\"}[20m])) by (status_code)",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }
@@ -188,7 +188,7 @@
       "id": 5,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"serverB-api\"}[5m])) by (le, route))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"serverB-api\"}[20m])) by (le, route))",
           "legendFormat": "{{route}}",
           "refId": "A"
         }
@@ -216,7 +216,7 @@
       "id": 6,
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"serverB-api\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"serverB-api\"}[20m])) by (le))",
           "legendFormat": "p99",
           "refId": "A"
         }
@@ -283,7 +283,7 @@
       "id": 8,
       "targets": [
         {
-          "expr": "rate(process_cpu_user_seconds_total{job=\"serverB-api\"}[5m])",
+          "expr": "rate(process_cpu_user_seconds_total{job=\"serverB-api\"}[20m])",
           "refId": "A"
         }
       ],
