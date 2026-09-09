@@ -82,10 +82,12 @@ EA2/Act2-1/
 ├── ServerB/                            # API de ejemplo (Docker, build local)
 │   ├── Dockerfile
 │   ├── package.json
-│   └── src/server.js                   # /health, /api/saludo, /api/productos, /metrics
+│   └── src/server.js                   # /health, /api/saludo, /api/productos, /api/error, /api/random, /metrics
 ├── scripts/
 │   ├── install-alloy.sh                # instala Grafana Alloy en el host
-│   └── alloy-config.alloy              # config basica de Alloy (metricas de sistema)
+│   ├── alloy-config.alloy              # config basica de Alloy (metricas de sistema)
+│   ├── generate_traffic.py             # genera trafico/errores de prueba contra ServerB
+│   └── backfill_7d_history.py          # backfillea 7 dias de historia sintetica en Prometheus
 └── README.md
 ```
 
@@ -187,7 +189,76 @@ docker compose ps
    for i in $(seq 1 20); do curl -s http://localhost:8080/api/saludo > /dev/null; done
    ```
 
-### Paso 6 (opcional) - Monitorear el host con Grafana Alloy
+### Paso 6 (opcional) - Generar trafico y errores de prueba
+
+Los paneles de "tasa de errores" y "requests por status code" (Act2-2) no muestran nada
+interesante si ServerB solo recibe trafico exitoso. Para eso ServerB expone dos endpoints
+pensados solo para pruebas:
+
+- `GET /api/error` - siempre responde 500.
+- `GET /api/random` - responde 200 (85%), 404 (10%) o 500 (5%) al azar, simulando un
+  endpoint real con fallas ocasionales.
+
+Probarlos a mano:
+
+```bash
+curl -i http://localhost:8080/api/error      # siempre 500
+curl -i http://localhost:8080/api/random     # variable
+```
+
+O generar carga sostenida con el script incluido (solo libreria estandar de Python, no
+requiere `pip install`):
+
+```bash
+python3 scripts/generate_traffic.py --duration 120 --rps 10 --error-ratio 0.15
+```
+
+Esto pega contra `/health`, `/api/saludo`, `/api/productos`, `/api/random` y (en el
+`error-ratio` indicado) `/api/error`, y al final imprime un resumen de status codes.
+Mientras corre, revisa en Grafana los paneles de tasa de requests, tasa de errores y
+status code: deberian moverse en tiempo real.
+
+### Paso 7 (opcional) - Cargar 7 dias de historia sintetica
+
+Un dashboard recien creado solo tiene los ultimos minutos de datos reales, lo que hace
+dificil apreciar tendencias (patron dia/noche, fin de semana, etc). Este script backfillea
+7 dias de metricas sinteticas **directo en el TSDB de Prometheus**, usando el mecanismo de
+backfill oficial (`promtool tsdb create-blocks-from openmetrics`, incluido en la imagen de
+Prometheus), sin necesidad de `remote_write` ni dependencias adicionales.
+
+Se recomienda correrlo **inmediatamente despues** de `docker compose up -d` (recien
+levantado ServerA), para que el backfill no se solape con datos reales ya recolectados:
+
+```bash
+python3 scripts/backfill_7d_history.py
+```
+
+Que hace:
+
+1. Genera un archivo OpenMetrics con una semana de metricas de host (`node_cpu_seconds_total`,
+   memoria, disco, red, load average) y de la API (`http_requests_total`,
+   `http_request_duration_seconds_*`, `process_*`), con un patron diurno/semanal realista
+   (mas trafico en horario de oficina, menos en la madrugada y los fines de semana).
+2. Copia el archivo dentro del contenedor `serverA-prometheus` y corre `promtool tsdb
+   create-blocks-from openmetrics` para convertirlo en bloques TSDB.
+3. Mueve esos bloques a la carpeta de datos de Prometheus.
+4. Reinicia el contenedor para que los cargue (los bloques nuevos no se detectan en
+   caliente).
+
+Verificar que funciono:
+
+```bash
+curl -s 'http://localhost:9090/api/v1/query_range?query=node_load1&start='$(($(date +%s)-604800))'&end='$(date +%s)'&step=3600' | jq '.data.result[0].values | length'
+# deberia devolver ~168 (24 horas x 7 dias)
+```
+
+O simplemente abrir los dashboards de Grafana con el selector de tiempo en **Last 7 days**.
+
+> Los datos de las metricas de host (`node_*`) del backfill usan las mismas labels que
+> generaria Grafana Alloy (Paso 8); si tambien instalaste Alloy, la historia sintetica y
+> los datos reales se completan en el tiempo sin quedar duplicados.
+
+### Paso 8 (opcional) - Monitorear el host con Grafana Alloy
 
 En la maquina cuyo sistema operativo quieras observar (CPU/memoria/disco/red):
 
@@ -224,7 +295,7 @@ node_memory_MemAvailable_bytes
 > `--web.enable-remote-write-receiver`). ServerB en cambio usa **pull**: es Prometheus quien
 > va a buscar los datos a `/metrics`.
 
-### Paso 7 (opcional) - Desplegar en AWS con ServerA y ServerB en instancias separadas
+### Paso 9 (opcional) - Desplegar en AWS con ServerA y ServerB en instancias separadas
 
 1. Crear 2 instancias EC2 (ej. Ubuntu 22.04), una para ServerA y otra para ServerB.
 2. Instalar Docker en ambas (`sudo apt-get install docker.io docker-compose-plugin` o el
@@ -291,6 +362,9 @@ por **Security Group ID** (no por IP) para que funcione aunque cambien las IPs p
 | `install-alloy.sh` falla con "falta PROMETHEUS_REMOTE_WRITE_URL" | No se exporto la variable antes de correr el script | `export PROMETHEUS_REMOTE_WRITE_URL=...` y volver a correr con `sudo -E` |
 | No llegan metricas de host a Prometheus | Prometheus no tiene `--web.enable-remote-write-receiver`, o el SG de ServerA no permite el puerto 9090 desde el host de Alloy | Revisar `docker-compose.yml` y el Security Group de ServerA |
 | `docker build` de ServerB falla en `npm install` | Sin conexion a internet en el build, o `package.json` corrupto | Verificar conectividad y el contenido de `ServerB/package.json` |
+| `backfill_7d_history.py` termina con "el rango a backfillear se solapa con el head" | El contenedor de Prometheus ya lleva rato corriendo con datos reales | Sube `--end-offset-minutes`, o `docker compose down -v && docker compose up -d` y corre el script de inmediato |
+| Tras el backfill, Prometheus no muestra historia y borra bloques como "obsoletos" al iniciar | Los timestamps del archivo OpenMetrics quedaron en milisegundos en vez de segundos | Revisar que `backfill_7d_history.py` no se haya modificado para usar `ts * 1000`; OpenMetrics usa SEGUNDOS |
+| `promtool tsdb create-blocks-from openmetrics` falla con "permission denied" | `docker cp` preserva el modo 600 del archivo temporal, y Prometheus corre como usuario `nobody` | Ya resuelto en el script (`os.chmod(local_path, 0o644)` antes de copiar); si lo replicas a mano, aplica el mismo chmod |
 
 ## 9) Checklist de verificacion
 
@@ -302,6 +376,10 @@ por **Security Group ID** (no por IP) para que funcione aunque cambien las IPs p
 - [ ] Un panel con `rate(http_requests_total[1m])` muestra datos al generar trafico.
 - [ ] La data de Prometheus persiste tras `docker compose restart` (no se resetea el
       historico).
+- [ ] (Opcional) `scripts/generate_traffic.py` corre sin errores y se ve reflejado en los
+      paneles de tasa de errores / status code.
+- [ ] (Opcional) `scripts/backfill_7d_history.py` corre sin errores y una query con rango
+      de 7 dias (ej. `node_load1`) devuelve datos historicos.
 - [ ] (Opcional) Alloy instalado en el host y `node_memory_MemAvailable_bytes` visible en
       Prometheus.
 - [ ] (Opcional AWS) Security Groups de ServerA y ServerB configurados segun la seccion 7.

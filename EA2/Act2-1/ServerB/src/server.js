@@ -4,9 +4,15 @@
 //   GET /health          -> chequeo de salud (usado por el propio Docker HEALTHCHECK)
 //   GET /api/saludo      -> endpoint de ejemplo 1
 //   GET /api/productos   -> endpoint de ejemplo 2
+//   GET /api/error       -> siempre responde 500 (para probar el panel de errores)
+//   GET /api/random      -> responde 200/404/500 al azar (para simular trafico real)
 //   GET /metrics         -> metricas en formato Prometheus (texto plano)
 //
 // Prometheus (ServerA) hace "pull" de este endpoint /metrics cada scrape_interval.
+//
+// /api/error y /api/random existen solo para generar datos de prueba en los
+// dashboards (tasa de errores, requests por status code). Ver scripts/generate_traffic.py
+// en Act2-1 para un generador de carga que las usa automaticamente.
 
 const express = require("express");
 const client = require("prom-client");
@@ -71,6 +77,25 @@ app.get("/api/productos", (req, res) => {
       { id: 2, nombre: "Producto B", precio: 2000 },
     ],
   });
+});
+
+// --- Endpoints para generar datos de prueba en los dashboards ---------------
+app.get("/api/error", (req, res) => {
+  // Siempre falla: util para ver el panel "Tasa de errores (5xx)" moverse.
+  res.status(500).json({ error: "Error simulado para pruebas de monitoreo" });
+});
+
+app.get("/api/random", (req, res) => {
+  // Simula un endpoint real: la mayoria de las veces responde bien, pero a
+  // veces devuelve 404 (recurso no encontrado) o 500 (falla del servidor).
+  const roll = Math.random();
+  if (roll < 0.05) {
+    res.status(500).json({ error: "Fallo aleatorio simulado" });
+  } else if (roll < 0.15) {
+    res.status(404).json({ error: "Recurso no encontrado (simulado)" });
+  } else {
+    res.status(200).json({ mensaje: "OK" });
+  }
 });
 
 // --- Endpoint de metricas para Prometheus ---------------------------------
