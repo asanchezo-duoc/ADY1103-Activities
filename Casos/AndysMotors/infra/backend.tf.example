@@ -1,0 +1,38 @@
+# Backend remoto del state (OPCIONAL pero muy recomendable en el Learner Lab).
+#
+# Por defecto Terraform guarda el state en un archivo local terraform.tfstate.
+# Eso funciona, pero tiene dos problemas concretos en este entorno:
+#
+#   1. Si se trabaja desde otra maquina, el state no esta ahi y Terraform intenta
+#      crear de nuevo recursos que ya existen.
+#   2. Si se pierde el archivo, quedan recursos huerfanos consumiendo presupuesto
+#      que hay que borrar a mano desde la consola.
+#
+# Guardarlo en S3 lo resuelve. Pasos:
+#
+#   1. Crear el bucket UNA VEZ, a mano (no con este mismo Terraform: seria el
+#      problema del huevo y la gallina). Reemplazar el sufijo por el ID de cuenta:
+#
+#        aws s3api create-bucket \
+#          --bucket andys-motors-tfstate-123456789012 \
+#          --region us-east-1
+#
+#        aws s3api put-bucket-versioning \
+#          --bucket andys-motors-tfstate-123456789012 \
+#          --versioning-configuration Status=Enabled
+#
+#   2. Copiar este archivo como backend.tf, ajustar el nombre del bucket y correr:
+#
+#        terraform init -migrate-state
+#
+# Nota: no se usa bloqueo con DynamoDB porque cada alumno trabaja en su propia
+# cuenta del lab, y DynamoDB no siempre esta habilitado. Si varias personas
+# comparten la misma cuenta, el bloqueo SI es necesario.
+
+terraform {
+  backend "s3" {
+    bucket = "andys-motors-tfstate-REEMPLAZAR_ID_DE_CUENTA"
+    key    = "andys-motors/terraform.tfstate"
+    region = "us-east-1"
+  }
+}

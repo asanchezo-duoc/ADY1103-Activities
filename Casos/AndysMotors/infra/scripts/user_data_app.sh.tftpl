@@ -1,0 +1,201 @@
+#!/bin/bash
+# ---------------------------------------------------------------------------
+# Instancia de APLICACION de Andys Motors.
+#
+# Este script lo ejecuta EC2 una sola vez, al primer arranque de la instancia.
+# Instala Docker y levanta, como contenedores, los sistemas del caso:
+#
+#   web           nginx sirviendo el sitio publico, el CRM y el modulo de pagos
+#   web-exporter  traduce el estado de nginx al formato de Prometheus
+#   db            PostgreSQL (solo si enable_rds = false)
+#   db-exporter   traduce el estado de PostgreSQL al formato de Prometheus
+#   node-exporter metricas del sistema operativo del host
+#
+# Los logs de este script quedan en /var/log/cloud-init-output.log
+# ---------------------------------------------------------------------------
+set -euxo pipefail
+
+APP_DIR=/opt/andys
+COMPOSE_VERSION=v2.29.7
+
+# --- 1. Docker -------------------------------------------------------------
+dnf update -y
+dnf install -y docker
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
+# Plugin de Docker Compose v2 (Amazon Linux 2023 no lo trae empaquetado)
+CLI_PLUGINS=/usr/local/lib/docker/cli-plugins
+mkdir -p "$CLI_PLUGINS"
+curl -fsSL "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64" \
+  -o "$CLI_PLUGINS/docker-compose"
+chmod +x "$CLI_PLUGINS/docker-compose"
+
+mkdir -p "$APP_DIR"/{nginx,html}
+cd "$APP_DIR"
+
+# --- 2. Contenido del sitio -------------------------------------------------
+cat > html/index.html <<'HTML'
+<!doctype html>
+<meta charset="utf-8">
+<title>Andys Motors</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: .25rem; }
+  p.sub { color: #666; margin-top: 0; }
+  ul { line-height: 1.9; }
+</style>
+<h1>Andys Motors</h1>
+<p class="sub">Sitio web publico &mdash; catalogo, stock y agendamiento de visitas</p>
+<ul>
+  <li><a href="/crm/">CRM / Sistema de ventas</a></li>
+  <li><a href="/pagos/">Sistema de pagos</a></li>
+  <li><a href="/health">Estado del servicio</a></li>
+</ul>
+<p><small>Entorno de laboratorio de la asignatura ADY1103. Empresa ficticia.</small></p>
+HTML
+
+mkdir -p html/crm html/pagos
+echo '<meta charset="utf-8"><title>CRM</title><h1>CRM / Sistema de Ventas</h1><p>Clientes, oportunidades, cotizaciones y ventas.</p><p><a href="/">Volver</a></p>' > html/crm/index.html
+echo '<meta charset="utf-8"><title>Pagos</title><h1>Sistema de Pagos</h1><p>Ordenes de pago, confirmacion y reconciliacion.</p><p><a href="/">Volver</a></p>' > html/pagos/index.html
+
+# --- 3. Configuracion de nginx ---------------------------------------------
+# El puerto 8080 expone stub_status, que es la fuente que lee el exporter.
+# Solo escucha dentro de la red de Docker: no se publica al exterior.
+cat > nginx/default.conf <<'NGINX'
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location = /health {
+        add_header Content-Type application/json;
+        return 200 '{"status":"ok","servicio":"andys-motors-web"}';
+    }
+}
+
+server {
+    listen 8080;
+    server_name _;
+
+    location = /stub_status {
+        stub_status;
+    }
+}
+NGINX
+
+# --- 4. Stack de contenedores ----------------------------------------------
+# El archivo se arma en tres tramos porque el servicio de base de datos solo
+# existe cuando NO se creo RDS. Los bloques "networks:" y "volumes:" van al
+# final, despues de todos los servicios, para no romper la estructura YAML.
+
+cat > docker-compose.yml <<'COMPOSE'
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: andys-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [andys]
+
+  # Exporter de la comunidad: traduce el stub_status de nginx a formato Prometheus.
+  web-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    container_name: andys-web-exporter
+    restart: unless-stopped
+    command:
+      - "--nginx.scrape-uri=http://web:8080/stub_status"
+    ports:
+      - "9113:9113"
+    depends_on: [web]
+    networks: [andys]
+
+  db-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: andys-db-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://__DB_USER__:__DB_PASSWORD__@__DB_HOST__:5432/__DB_NAME__?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks: [andys]
+
+  # Metricas del sistema operativo del host (ver EA2/Act2-3).
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: andys-node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--web.listen-address=:9100"
+COMPOSE
+
+# Tramo 2: la base de datos como contenedor, solo cuando no hay RDS.
+if [ "${use_rds}" != "true" ]; then
+  cat >> docker-compose.yml <<'COMPOSE_DB'
+
+  db:
+    image: postgres:16-alpine
+    container_name: andys-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: __DB_NAME__
+      POSTGRES_USER: __DB_USER__
+      POSTGRES_PASSWORD: __DB_PASSWORD__
+    volumes:
+      - andys_db:/var/lib/postgresql/data
+    networks: [andys]
+COMPOSE_DB
+fi
+
+# Tramo 3: redes y volumenes, siempre al final del archivo.
+cat >> docker-compose.yml <<'COMPOSE_NET'
+
+networks:
+  andys:
+    driver: bridge
+COMPOSE_NET
+
+if [ "${use_rds}" != "true" ]; then
+  cat >> docker-compose.yml <<'COMPOSE_VOL'
+
+volumes:
+  andys_db:
+COMPOSE_VOL
+fi
+
+# Se sustituyen los marcadores al final para no arrastrar el password por los
+# heredocs ni dejarlo escrito en dos lugares distintos. Los marcadores usan
+# dobles guiones bajos para que no colisionen con nombres reales del YAML
+# (por ejemplo, DATA_SOURCE_NAME).
+sed -i \
+  -e "s|__DB_HOST__|${db_host}|g" \
+  -e "s|__DB_NAME__|${db_name}|g" \
+  -e "s|__DB_USER__|${db_user}|g" \
+  -e "s|__DB_PASSWORD__|${db_password}|g" \
+  docker-compose.yml
+chmod 600 docker-compose.yml
+
+# --- 5. Arranque ------------------------------------------------------------
+docker compose up -d
+
+echo "=== Stack de aplicacion de ${project_name} levantado ==="
+docker compose ps

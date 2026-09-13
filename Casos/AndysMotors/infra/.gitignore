@@ -1,0 +1,24 @@
+# State de Terraform: puede contener valores sensibles (passwords de la base de
+# datos y de Grafana) y es especifico de cada cuenta del lab.
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+
+# NOTA: .terraform.lock.hcl SI se versiona a proposito. Es el archivo que fija
+# la version exacta del proveedor de AWS, y garantiza que todos los alumnos
+# usen la misma aunque hashicorp publique una nueva a mitad de semestre.
+
+# Variables reales (usar terraform.tfvars.example como plantilla)
+terraform.tfvars
+*.auto.tfvars
+
+# Credenciales temporales copiadas del panel "AWS Details" del Learner Lab
+.aws-credentials
+*.pem
+
+# Planes guardados
+*.tfplan
+
+# Backend real (usar backend.tf.example como plantilla)
+backend.tf

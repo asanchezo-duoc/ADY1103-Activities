@@ -87,6 +87,21 @@ Consideraciones adicionales sobre la operación:
 
 ---
 
+## Infraestructura del caso
+
+La carpeta [`infra/`](./infra) contiene el código **Terraform** que levanta esta misma
+arquitectura sobre una cuenta de **AWS Academy Learner Lab**: las instancias EC2, el bucket
+S3, los Security Groups y —opcionalmente— la base de datos RDS. Las plataformas del caso
+(sitio web, CRM y pagos) corren como contenedores Docker sobre la instancia de aplicación, y
+publican métricas a través de tres exporters.
+
+Está escrita específicamente para las restricciones del Learner Lab (no se pueden crear
+roles de IAM, las credenciales expiran, las instancias se detienen al cerrar la sesión); el
+[README de `infra/`](./infra/README.md) documenta cada una y cómo se trabaja alrededor de
+ellas.
+
+---
+
 ## Sobre el diagrama
 
 El diagrama está en formato **SVG** ([`assets/arquitectura-andys-motors.svg`](./assets/arquitectura-andys-motors.svg)),
