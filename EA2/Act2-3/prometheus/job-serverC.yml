@@ -1,0 +1,25 @@
+# Bloque a PEGAR dentro de scrape_configs: en el archivo
+#   EA2/Act2-1/ServerA/prometheus/prometheus.yml
+#
+# Respetar la indentacion: "- job_name" va con 2 espacios, alineado con los jobs
+# "prometheus" y "serverB-api" que ya existen en ese archivo.
+#
+# Despues de pegarlo, recargar Prometheus SIN reiniciar el contenedor:
+#   curl -X POST http://localhost:9090/-/reload
+# (funciona porque ServerA levanta Prometheus con --web.enable-lifecycle)
+
+  # 4) ServerC: sistema operativo del host, medido por Node Exporter (modelo PULL).
+  #    IMPORTANTE:
+  #    - Reemplazar "REEMPLAZAR_IP_O_HOST_SERVERC" por la IP/hostname de ServerC.
+  #    - Si ServerC es otra instancia EC2, usar su IP PRIVADA (ej. 10.0.1.30) y
+  #      permitir el puerto 9100 desde el Security Group de ServerA.
+  #    - Si ServerC corre en la misma maquina que ServerA, ver la tabla del Paso 4
+  #      del README (host.docker.internal o la IP del bridge de Docker).
+  - job_name: "node"
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["REEMPLAZAR_IP_O_HOST_SERVERC:9100"]
+        labels:
+          app: "serverC-host"
+          rol: "servidor-observado"

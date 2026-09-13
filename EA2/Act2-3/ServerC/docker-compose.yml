@@ -1,0 +1,63 @@
+# ServerC - Node Exporter (sensor del sistema operativo)
+#
+# ServerC es el "servidor observado" de esta actividad: no corre aplicaciones, solo
+# expone las metricas de su propio sistema operativo (CPU, memoria, disco, red) para
+# que el Prometheus de ServerA vaya a buscarlas (PULL) cada 15 segundos.
+#
+# Levantar:
+#   cd ServerC
+#   docker compose up -d
+#
+# Verificar:
+#   curl -s localhost:9100/metrics | head -20
+
+services:
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: serverC-node-exporter
+    restart: unless-stopped
+
+    # --- Romper el aislamiento del contenedor -------------------------------------
+    # Por defecto un contenedor solo ve SUS propios procesos, SU propia red y SU propio
+    # sistema de archivos. Si Node Exporter corriera asi, medirian el contenedor y no el
+    # servidor. Las tres piezas siguientes (network_mode + pid + volumes) le devuelven la
+    # visibilidad de la maquina real, cada una en una dimension distinta.
+
+    # RED: comparte el espacio de nombres de red del host.
+    # Sin esto, node_network_* reporta las interfaces del contenedor (una eth0 virtual con
+    # unos pocos KB) en vez de la tarjeta de red real del servidor. Montar /proc NO alcanza
+    # para esto: /proc/net es un enlace a /proc/self/net, asi que siempre resuelve al
+    # namespace de red del propio proceso que lee.
+    # Efecto secundario: el exporter queda escuchando directamente en el puerto 9100 del
+    # host, por eso este servicio no lleva una seccion "ports:" (seria ignorada).
+    network_mode: host
+
+    # PROCESOS: comparte el espacio de nombres de procesos (PID) del host, para poder
+    # contar procesos reales del sistema operativo y no solo los del contenedor.
+    pid: host
+
+    # ARCHIVOS: /proc (procesos, CPU, memoria), /sys (hardware) y / (uso de disco).
+    #
+    # La bandera ":ro" (read-only) es OBLIGATORIA: si el contenedor se viera comprometido,
+    # solo podria LEER el estado del sistema anfitrion, nunca modificar, borrar ni alterar
+    # archivos del servidor. Es lo que hace aceptable el riesgo de exponerle el kernel.
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+    command:
+      # --- El paso que suele olvidarse ------------------------------------------
+      # Montar los directorios NO basta: hay que decirle a Node Exporter que lea desde
+      # esas rutas montadas en vez de las suyas propias. Sin estos tres flags el
+      # contenedor tiene /proc del host montado pero sigue leyendo el suyo, y las
+      # metricas de CPU, memoria y disco describen al contenedor en vez del servidor.
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+
+      # Puerto de publicacion de /metrics. Como el contenedor usa la red del host, esto
+      # abre el 9100 directamente en el servidor.
+      # En AWS, el Security Group de ServerC debe permitir 9100 SOLO desde ServerA
+      # (ver seccion 15 del README.md), nunca desde 0.0.0.0/0.
+      - "--web.listen-address=:9100"
