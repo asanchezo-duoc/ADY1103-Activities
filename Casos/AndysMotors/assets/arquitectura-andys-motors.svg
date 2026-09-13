@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1580 1000" width="1580" height="1000" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Arquitectura actual de Andys Motors</title>
+  <desc>Clientes, vendedores y caja acceden respectivamente al sitio web publico, al CRM y al sistema de pagos. Los tres convergen en la aplicacion Andys Motors desplegada en Amazon EC2, que se comunica de forma bidireccional con Amazon RDS, deposita archivos en Amazon S3, se resuelve por Amazon Route 53 y envia las transacciones a un proveedor externo de pagos.</desc>
+
+  <defs>
+    <marker id="flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+  </defs>
+
+  <style>
+    .t      { font-size: 15px; fill: #1a1a1a; }
+    .b      { font-size: 14.5px; fill: #333; }
+    .h      { font-size: 17px; font-weight: 700; fill: #111; }
+    .actor  { font-size: 16px; font-weight: 700; fill: #111; }
+    .leg    { font-size: 14px; fill: #333; }
+    .legh   { font-size: 14.5px; font-weight: 700; fill: #111; }
+    .flow   { stroke: #333; stroke-width: 2.2; fill: none; marker-end: url(#flecha); }
+    .dep    { stroke: #333; stroke-width: 2.2; fill: none; stroke-dasharray: 9 6; marker-end: url(#flecha); }
+    .bidi   { stroke: #333; stroke-width: 2.2; fill: none; marker-start: url(#flecha); marker-end: url(#flecha); }
+  </style>
+
+  <rect width="1580" height="1000" fill="#fff"/>
+
+  <text x="790" y="44" text-anchor="middle" font-size="30" font-weight="700" fill="#111">Arquitectura Actual &#8211; Andys Motors</text>
+  <text x="790" y="76" text-anchor="middle" font-size="17" font-style="italic" fill="#555">(Infraestructura provista &#8211; Monitoreo y observabilidad por definir)</text>
+
+  <!-- ===== Actores ===== -->
+  <g fill="#1d6fd0">
+    <circle cx="70" cy="152" r="15"/><circle cx="105" cy="145" r="18"/><circle cx="140" cy="152" r="15"/>
+    <path d="M 48 196 q 22 -24 44 0 z"/><path d="M 78 192 q 27 -30 54 0 z"/><path d="M 118 196 q 22 -24 44 0 z"/>
+  </g>
+  <text x="40" y="228" class="actor">Clientes / Usuarios</text>
+  <text x="40" y="252" class="b">&#8226; Consultan vehiculos</text>
+  <text x="40" y="274" class="b">&#8226; Revisan stock</text>
+  <text x="40" y="296" class="b">&#8226; Solicitan contacto</text>
+  <text x="40" y="318" class="b">&#8226; Agendan visitas</text>
+
+  <g fill="#2f8f42">
+    <circle cx="105" cy="378" r="20"/>
+    <path d="M 72 430 q 33 -38 66 0 z"/>
+  </g>
+  <text x="40" y="462" class="actor">Vendedores</text>
+  <text x="40" y="486" class="b">&#8226; Gestionan clientes</text>
+  <text x="40" y="508" class="b">&#8226; Registran oportunidades</text>
+  <text x="40" y="530" class="b">&#8226; Gestionan ventas</text>
+
+  <g fill="#e8720c">
+    <circle cx="105" cy="600" r="20"/>
+    <path d="M 72 652 q 33 -38 66 0 z"/>
+  </g>
+  <text x="40" y="684" class="actor">Caja / Administracion</text>
+  <text x="40" y="708" class="b">&#8226; Genera ordenes de cobro</text>
+  <text x="40" y="730" class="b">&#8226; Registra pagos</text>
+  <text x="40" y="752" class="b">&#8226; Emite documentos</text>
+
+  <!-- ===== Canal publico: sitio web ===== -->
+  <rect x="285" y="118" width="270" height="165" rx="12" fill="#f2f8ff" stroke="#1d6fd0" stroke-width="2.5"/>
+  <circle cx="316" cy="152" r="13" fill="none" stroke="#1d6fd0" stroke-width="2.2"/>
+  <path d="M 303 152 h 26 M 316 139 q 9 13 0 26 M 316 139 q -9 13 0 26" stroke="#1d6fd0" stroke-width="1.8" fill="none"/>
+  <text x="342" y="159" class="h">Sitio Web Publico</text>
+  <text x="303" y="192" class="b">&#8226; Catalogo de vehiculos</text>
+  <text x="303" y="215" class="b">&#8226; Stock disponible</text>
+  <text x="303" y="238" class="b">&#8226; Agendamiento de visitas</text>
+  <text x="303" y="261" class="b">&#8226; Solicitud de contacto</text>
+
+  <!-- ===== Canal interno: CRM ===== -->
+  <rect x="285" y="340" width="270" height="178" rx="12" fill="#f3faf4" stroke="#2f8f42" stroke-width="2.5"/>
+  <rect x="303" y="362" width="26" height="20" rx="3" fill="none" stroke="#2f8f42" stroke-width="2.2"/>
+  <circle cx="311" cy="370" r="3.5" fill="#2f8f42"/>
+  <path d="M 318 368 h 8 M 318 375 h 8" stroke="#2f8f42" stroke-width="1.8"/>
+  <text x="342" y="372" class="h">CRM / Sistema</text>
+  <text x="342" y="393" class="h">de Ventas</text>
+  <text x="303" y="425" class="b">&#8226; Clientes y contactos</text>
+  <text x="303" y="448" class="b">&#8226; Oportunidades</text>
+  <text x="303" y="471" class="b">&#8226; Cotizaciones</text>
+  <text x="303" y="494" class="b">&#8226; Ventas</text>
+
+  <!-- ===== Canal financiero: pagos ===== -->
+  <rect x="285" y="565" width="270" height="152" rx="12" fill="#fef6ef" stroke="#e8720c" stroke-width="2.5"/>
+  <rect x="303" y="588" width="28" height="19" rx="3" fill="none" stroke="#e8720c" stroke-width="2.2"/>
+  <path d="M 303 595 h 28" stroke="#e8720c" stroke-width="2.2"/>
+  <text x="344" y="606" class="h">Sistema de Pagos</text>
+  <text x="303" y="640" class="b">&#8226; Ordenes de pago</text>
+  <text x="303" y="663" class="b">&#8226; Confirmacion de pago</text>
+  <text x="303" y="686" class="b">&#8226; Reconciliacion</text>
+
+  <!-- ===== Aplicacion (EC2) ===== -->
+  <rect x="675" y="280" width="270" height="242" rx="12" fill="#f7f2ff" stroke="#8b5cf6" stroke-width="2.5"/>
+  <g fill="none" stroke="#8b5cf6" stroke-width="2.2">
+    <ellipse cx="710" cy="317" rx="15" ry="6"/>
+    <path d="M 695 317 v 18 q 15 8 30 0 v -18"/>
+  </g>
+  <text x="740" y="312" class="h">Aplicacion</text>
+  <text x="740" y="333" class="h">Andys Motors</text>
+  <text x="740" y="354" class="h">(EC2)</text>
+  <text x="697" y="392" class="b">&#8226; Logica de negocio</text>
+  <text x="697" y="415" class="b">&#8226; API / Servicios internos</text>
+  <text x="697" y="438" class="b">&#8226; Integracion entre sistemas</text>
+  <text x="697" y="461" class="b">&#8226; Validaciones</text>
+  <text x="697" y="484" class="b">&#8226; Reglas de negocio</text>
+
+  <!-- ===== RDS ===== -->
+  <rect x="1025" y="225" width="240" height="300" rx="12" fill="#eef5fc" stroke="#1f6fb2" stroke-width="2.5"/>
+  <g fill="none" stroke="#1f6fb2" stroke-width="2.2">
+    <ellipse cx="1062" cy="264" rx="15" ry="6"/>
+    <path d="M 1047 264 v 20 q 15 8 30 0 v -20"/>
+  </g>
+  <text x="1092" y="262" class="h">Base de Datos</text>
+  <text x="1092" y="283" class="h">Amazon RDS</text>
+  <text x="1047" y="325" class="b">&#8226; Clientes</text>
+  <text x="1047" y="348" class="b">&#8226; Vehiculos</text>
+  <text x="1047" y="371" class="b">&#8226; Stock</text>
+  <text x="1047" y="394" class="b">&#8226; Agendamientos</text>
+  <text x="1047" y="417" class="b">&#8226; Oportunidades / Ventas</text>
+  <text x="1047" y="440" class="b">&#8226; Pagos</text>
+  <text x="1047" y="463" class="b">&#8226; Historial</text>
+
+  <!-- ===== S3 ===== -->
+  <rect x="680" y="612" width="270" height="160" rx="12" fill="#f2f8ff" stroke="#1f6fb2" stroke-width="2.5"/>
+  <path d="M 700 640 h 26 l -3 24 h -20 z" fill="none" stroke="#1f6fb2" stroke-width="2.2"/>
+  <text x="738" y="658" class="h">Amazon S3</text>
+  <text x="698" y="692" class="b">&#8226; Archivos / Documentos</text>
+  <text x="698" y="715" class="b">&#8226; Imagenes de vehiculos</text>
+  <text x="698" y="738" class="b">&#8226; Respaldos</text>
+  <text x="698" y="761" class="b">&#8226; Exportaciones / Reportes</text>
+
+  <!-- ===== Route 53 ===== -->
+  <rect x="975" y="638" width="200" height="96" rx="12" fill="#f2f8ff" stroke="#1f6fb2" stroke-width="2.5"/>
+  <circle cx="1000" cy="668" r="12" fill="none" stroke="#1f6fb2" stroke-width="2.2"/>
+  <text x="1000" y="673" text-anchor="middle" font-size="11" font-weight="700" fill="#1f6fb2">53</text>
+  <text x="1022" y="673" class="h">Amazon Route 53</text>
+  <text x="994" y="710" class="b">&#8226; DNS publico</text>
+
+  <!-- ===== Proveedor externo ===== -->
+  <rect x="1300" y="530" width="245" height="188" rx="12" fill="#fdf8e8" stroke="#d9a300" stroke-width="2.5"/>
+  <path d="M 1320 572 h 28 M 1322 572 v -10 l 12 -8 l 12 8 v 10 M 1326 572 v 14 M 1334 572 v 14 M 1342 572 v 14 M 1320 590 h 28" fill="none" stroke="#d9a300" stroke-width="2.2"/>
+  <text x="1360" y="566" class="h">Proveedor Externo</text>
+  <text x="1360" y="587" class="h">de Pagos / Banco</text>
+  <text x="1318" y="625" class="b">&#8226; Autorizacion de pago</text>
+  <text x="1318" y="648" class="b">&#8226; Captura de pago</text>
+  <text x="1318" y="671" class="b">&#8226; Respuesta de transaccion</text>
+
+  <!-- ===== Flujos ===== -->
+  <path class="flow" d="M 178 200 H 278"/>
+  <path class="flow" d="M 150 428 H 278"/>
+  <path class="flow" d="M 150 650 H 278"/>
+
+  <path class="flow" d="M 555 200 H 615 V 330 H 668"/>
+  <path class="flow" d="M 555 428 H 615 V 400 H 668"/>
+  <path class="flow" d="M 555 650 H 615 V 470 H 668"/>
+
+  <path class="bidi" d="M 948 375 H 1022"/>
+
+  <path class="dep"  d="M 760 525 V 609"/>
+  <path class="dep"  d="M 1010 635 V 548 H 868 V 525"/>
+  <path class="flow" d="M 915 525 V 588 H 1296"/>
+
+  <!-- ===== Leyenda ===== -->
+  <rect x="40" y="812" width="1500" height="160" rx="10" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="7 5"/>
+
+  <text x="66" y="845" class="legh">Leyenda</text>
+  <path d="M 66 874 H 128" stroke="#333" stroke-width="2.2" marker-end="url(#flecha)"/>
+  <text x="140" y="879" class="leg">Flujo de trafico / Interaccion</text>
+  <path d="M 66 906 H 128" stroke="#333" stroke-width="2.2" stroke-dasharray="9 6" marker-end="url(#flecha)"/>
+  <text x="140" y="911" class="leg">Dependencia / Resolucion</text>
+  <path d="M 70 938 H 128" stroke="#333" stroke-width="2.2" marker-start="url(#flecha)" marker-end="url(#flecha)"/>
+  <text x="140" y="943" class="leg">Comunicacion bidireccional</text>
+
+  <text x="512" y="845" class="legh">Tipos de Canales</text>
+  <rect x="512" y="862" width="22" height="20" rx="4" fill="#f2f8ff" stroke="#1d6fd0" stroke-width="2.5"/>
+  <text x="546" y="879" class="leg">Canal Publico</text>
+  <rect x="512" y="894" width="22" height="20" rx="4" fill="#f3faf4" stroke="#2f8f42" stroke-width="2.5"/>
+  <text x="546" y="911" class="leg">Canal Interno (Ventas)</text>
+  <rect x="512" y="926" width="22" height="20" rx="4" fill="#fef6ef" stroke="#e8720c" stroke-width="2.5"/>
+  <text x="546" y="943" class="leg">Canal Financiero</text>
+
+  <rect x="830" y="862" width="22" height="20" rx="4" fill="#f7f2ff" stroke="#8b5cf6" stroke-width="2.5"/>
+  <text x="864" y="879" class="leg">Servicio de Aplicacion</text>
+  <rect x="830" y="894" width="22" height="20" rx="4" fill="#eef5fc" stroke="#1f6fb2" stroke-width="2.5"/>
+  <text x="864" y="911" class="leg">Base de Datos / Almacenamiento</text>
+  <rect x="830" y="926" width="22" height="20" rx="4" fill="#fdf8e8" stroke="#d9a300" stroke-width="2.5"/>
+  <text x="864" y="943" class="leg">Servicio Externo</text>
+
+  <text x="1140" y="845" class="legh">Notas</text>
+  <text x="1140" y="879" class="leg">&#8226; La infraestructura actual no considera monitoreo ni</text>
+  <text x="1152" y="899" class="leg">observabilidad integrada.</text>
+  <text x="1140" y="927" class="leg">&#8226; CloudWatch u otras herramientas deberan ser</text>
+  <text x="1152" y="947" class="leg">propuestas y justificadas por el estudiante.</text>
+</svg>

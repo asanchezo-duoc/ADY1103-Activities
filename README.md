@@ -13,3 +13,12 @@ Cada actividad vive en su propia carpeta, organizada por unidad/evaluación:
 
 Cada carpeta de actividad incluye su propio `README.md` con la guía paso a paso para
 desarrollarla.
+
+## Casos
+
+Además, la carpeta [`Casos`](./Casos) reúne los casos de estudio de empresas ficticias que
+se usan como contexto de negocio en la asignatura:
+
+| Caso | Rubro |
+|---|---|
+| [`Casos/AndysMotors`](./Casos/AndysMotors) | Comercialización presencial de vehículos nuevos y usados, con plataformas desplegadas sobre AWS. |
