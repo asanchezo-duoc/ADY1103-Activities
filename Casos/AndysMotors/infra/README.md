@@ -28,30 +28,55 @@ sobre una cuenta de **AWS Academy Learner Lab**.
 
 ## 1) Qué levanta
 
-El caso describe seis plataformas. **No necesitan seis servidores**: corren como
-contenedores sobre una sola instancia, lo que mantiene el laboratorio dentro del
-presupuesto y del límite de instancias del lab.
+Despliega el [entorno de demostración](../demo) completo: las seis plataformas del caso
+como aplicaciones reales instrumentadas, la base de datos central, y un balanceador HAProxy
+como única puerta de entrada.
 
-| Elemento del caso | Cómo se implementa |
-|---|---|
-| Sitio web público, CRM, sistema de pagos | Contenedor `nginx` en la instancia de aplicación |
-| Base de datos central | Contenedor `postgres` (o Amazon RDS real, ver sección 8) |
-| Archivos, imágenes, respaldos, reportes | Bucket **Amazon S3** con versionado y cifrado |
-| Aplicación sobre EC2 | Instancia **EC2** `t3.micro` con Amazon Linux 2023 |
-| DNS público (Route 53 en el diagrama) | `sslip.io` — ver sección 13 |
-| Monitoreo | Segunda instancia EC2 con **Prometheus + Grafana** |
+### Topología
 
-Además, la instancia de aplicación expone **tres exporters**, que es el puente directo con
-[EA2/Act2-3](../../../EA2/Act2-3):
+La variable `topologia` decide cómo se reparten las plataformas. El entorno desplegado es
+**idéntico** en ambos casos: cambia solo qué perfiles de Docker Compose levanta cada
+máquina.
 
-| Puerto | Exporter | Qué traduce |
+| `topologia` | Servidores | Cuándo usarla |
 |---|---|---|
-| 9100 | `node-exporter` | Sistema operativo del host: CPU, memoria, disco, red |
-| 9113 | `nginx-prometheus-exporter` | Conexiones y peticiones del sitio web, CRM y pagos |
-| 9187 | `postgres-exporter` | Estado de la base de datos central |
+| `"completa"` (por defecto) | 7: uno por plataforma más el balanceador | Es el despliegue que describe el caso. Permite scraping multi-host real y reglas de Security Group entre servidores |
+| `"compacta"` | 2: todas las plataformas en uno, más el balanceador | Cuando la cuota de instancias del laboratorio no alcanza |
 
-Prometheus hace **pull** de los tres. Al terminar, `/targets` debe mostrar los jobs `node`,
-`nginx` y `postgres` en verde.
+Con `enable_monitoring = true` se suma una instancia más con Prometheus y Grafana de
+referencia.
+
+| Servidor | Plataforma del caso | Puerto |
+|---|---|---|
+| `borde` | Balanceador HAProxy: entrada pública | 80, 8404 |
+| `web` | Sitio web público | 8081 |
+| `stock` | Consulta de stock de vehículos | 8082 |
+| `agenda` | Agendamiento de visitas | 8083 |
+| `crm` | CRM y sistema de ventas | 8084 |
+| `pagos` | Sistema de pagos y proveedor externo | 8085, 8086 |
+| `data` | Base de datos central | 5432 |
+
+Más un bucket **S3** para los documentos del negocio, que además transporta el código del
+entorno hasta las instancias.
+
+### Dos decisiones que conviene entender
+
+**Las IP privadas se fijan por adelantado.** Cada servidor necesita las direcciones de los
+demás dentro de su script de arranque. Si dejáramos que AWS las asignara, Terraform tendría
+que leer la IP de una instancia para construir otra del mismo recurso: una referencia
+circular imposible de resolver. Se calculan con `cidrhost()` sobre el rango de la subred,
+desde el `.200` hacia arriba. Como efecto secundario, no cambian nunca.
+
+**El código viaja por S3.** Terraform empaqueta la carpeta `demo/` y la sube al bucket; cada
+instancia la descarga al arrancar con el perfil del laboratorio. Se descartó clonar el
+repositorio (obligaría a que fuera público) e incrustar el código en el `user_data` (AWS lo
+limita a 16 KB).
+
+### Lo que NO incluye
+
+El entorno **expone** telemetría, no la recolecta. No hay Node Exporter, ni
+postgres-exporter, ni Prometheus, ni Grafana (salvo el stack de referencia opcional).
+Construir todo eso es el trabajo del estudiante.
 
 ## 2) Requisitos
 
@@ -107,6 +132,20 @@ No se destruyen: quedan detenidas y se pueden volver a encender. Pero al encende
 El lab normalmente solo habilita **us-east-1**, y restringe los tipos de instancia a
 familias pequeñas (`t2`/`t3`). Los valores por defecto de este proyecto ya respetan eso.
 
+### 3.5 La cuota de instancias es el límite real, no el presupuesto
+
+Con `topologia = "completa"` y el monitoreo de referencia encendido son **8 instancias**. En
+dinero eso es despreciable (unos centavos de dólar por hora), pero puede chocar con el
+límite de instancias o de vCPU de tu versión del lab.
+
+Si el `apply` falla con `VcpuLimitExceeded` o `InstanceLimitExceeded`, hay dos salidas que no
+cambian nada del entorno desplegado:
+
+```hcl
+topologia         = "compacta"   # 2 instancias en vez de 7
+enable_monitoring = false        # una menos
+```
+
 ## 4) Credenciales
 
 En el lab, botón **AWS Details** → **AWS CLI**. Copia el bloque completo a un archivo
@@ -157,31 +196,35 @@ Terraform.
 
 ## 6) Después del apply
 
-El `user_data` demora entre **2 y 4 minutos** en terminar después de que la instancia
-aparece como `running`. Si el sitio no responde de inmediato, es normal.
+El arranque de cada servidor toma entre **3 y 6 minutos**: instala Docker, descarga el
+entorno desde S3 y, en los servidores de aplicación, construye la imagen. Que la instancia
+diga `running` no significa que ya esté lista.
 
 ```bash
-# Ver el avance del arranque
-ssh -i labsuser.pem ec2-user@<IP_APP>
+# Avance del arranque, en cualquier servidor
+ssh -i labsuser.pem ec2-user@<IP_PUBLICA>
 sudo tail -f /var/log/cloud-init-output.log
 
-# Contenedores de la aplicación
+# Contenedores levantados en esa máquina
 cd /opt/andys && sudo docker compose ps
-
-# Los tres exporters respondiendo
-curl -s localhost:9100/metrics | head    # sistema operativo
-curl -s localhost:9113/metrics | head    # nginx
-curl -s localhost:9187/metrics | head    # postgresql
 ```
 
 Checklist de que quedó bien:
 
-- [ ] `http://<IP_APP>` muestra el sitio de Andys Motors, con enlaces a CRM y pagos.
-- [ ] `http://<IP_APP>/health` devuelve JSON con `"status":"ok"`.
-- [ ] `http://<IP_MONITOREO>:9090/targets` muestra `node`, `nginx` y `postgres` en **UP**.
-- [ ] Grafana en `http://<IP_MONITOREO>:3000` entra con `admin` y tu password, y el
-      datasource **Prometheus** ya existe sin configurarlo.
-- [ ] El bucket S3 aparece en la consola con el nombre que entregó `terraform output`.
+- [ ] `http://<IP_BORDE>/` responde con la portada de Andys Motors.
+- [ ] `http://<IP_BORDE>/stock/api/stock` devuelve el catálogo de vehículos.
+- [ ] `http://<IP_BORDE>:8404/stats` muestra **todas las plataformas en verde**.
+- [ ] `http://<IP_BORDE>:8404/metrics` devuelve más de 200 familias de métricas.
+- [ ] `terraform output endpoints_de_metricas` lista las direcciones a scrapear.
+- [ ] Un flujo de negocio completo funciona:
+      ```bash
+      curl -X POST http://<IP_BORDE>/api/contacto -H 'Content-Type: application/json' \
+        -d '{"nombre":"Prueba","monto_clp":15000000}'
+      ```
+- [ ] (Si `enable_monitoring = true`) Prometheus muestra los jobs en **UP** y Grafana entra.
+
+Para generar tráfico con la curva horaria del negocio y para encender los escenarios de
+falla, ver el [README del entorno](../demo/README.md).
 
 ## 7) Cuando se reinicia la sesión del lab
 
@@ -196,9 +239,9 @@ Esto es lo que pasa en la práctica, y conviene saberlo antes de que ocurra en c
 | State de Terraform | Se conserva (local o en S3). |
 | Credenciales | Expiran: hay que copiarlas de nuevo (sección 4). |
 
-La buena noticia es que **Prometheus sigue funcionando sin tocar nada**: su configuración
-apunta a la IP *privada* de la instancia de aplicación, que no cambia. Ese fue el motivo de
-usar la privada y no la pública.
+La buena noticia es que **la plataforma sigue funcionando sin tocar nada**: HAProxy apunta a
+las IP *privadas* de los backends, y esas están fijadas por Terraform, así que no cambian ni
+al reiniciar ni al recrear. Lo mismo vale para el Prometheus de referencia.
 
 Lo que sí hay que recuperar son las URLs, y para eso basta:
 
@@ -254,8 +297,10 @@ no hay forma de habilitarlo desde la cuenta del lab.
 
 ## 10) Presupuesto
 
-Con los valores por defecto (dos `t3.micro`, dos discos gp3 de 20 GB y un bucket S3 casi
-vacío), el gasto es de unos pocos centavos de dólar por hora de laboratorio.
+Con los valores por defecto (`topologia = "completa"` más el monitoreo de referencia: ocho
+`t3.micro`, ocho discos gp3 de 20 GB y un bucket S3 casi vacío), el gasto es de unos pocos
+centavos de dólar por hora de laboratorio. Con `topologia = "compacta"` baja a tres
+instancias.
 
 Lo que de verdad quema presupuesto:
 
@@ -278,6 +323,12 @@ Lo que de verdad quema presupuesto:
 | `terraform destroy` se queda pegado en el bucket S3 | El bucket tiene objetos y versiones | Ya está resuelto con `force_destroy = true`; si falla igual, vaciarlo desde la consola |
 | La creación de RDS falla por cifrado | El lab restringe KMS | Poner `storage_encrypted = false` en `database.tf` y reintentar |
 | Perdiste `terraform.tfstate` | Quedaron recursos huérfanos | Borrarlos a mano desde la consola. Para que no vuelva a pasar, usar `backend.tf.example` |
+| `VcpuLimitExceeded` / `InstanceLimitExceeded` | La topología completa pide 7 u 8 instancias | `topologia = "compacta"` y/o `enable_monitoring = false` (ver 3.5) |
+| `InvalidIPAddress.InUse` al crear una instancia | Alguna de las IP privadas fijas (`.200` en adelante) ya está ocupada en la subred | Subir `ip_base` en `locals.tf` a un valor libre, por ejemplo 210 |
+| Un backend sale DOWN en `:8404/stats` | Ese servidor aún está arrancando, o su contenedor falló | Esperar a que termine el `user_data`; si persiste, `sudo docker compose logs` en esa máquina |
+| Todo devuelve 503 desde el balanceador | Los backends todavía no pasan el health check | HAProxy los reincorpora solo, sin reiniciar nada |
+| El `user_data` falla en `aws s3 cp` | El perfil de instancia no tiene acceso al bucket, o la región es otra | Verificar que la instancia use `LabInstanceProfile` y que `aws_region` sea la del bucket |
+| El `apply` sube miles de archivos al bucket | Se corrió `npm install` dentro de `demo/app` | Borrar `demo/app/node_modules`. El código ya lo excluye, pero conviene no generarlo |
 
 ## 12) Destruir el laboratorio
 
@@ -299,7 +350,7 @@ Decisiones tomadas a propósito, con su motivo:
 |---|---|---|
 | **Route 53** | Una hosted zone tiene costo mensual fijo y no siempre está habilitada. Para el caso no aporta nada pedagógico | `sslip.io`, que resuelve la IP contenida en el propio nombre, gratis y sin permisos |
 | **VPC propia** | Más permisos involucrados, más lento, más que destruir, y lleva a la tentación del NAT Gateway | La VPC por defecto de la cuenta |
-| **ALB / Auto Scaling** | Costo y complejidad que no aportan al objetivo de observabilidad | Una instancia con contenedores |
+| **ALB / Auto Scaling** | Costo, y el balanceador de AWS no expone métricas Prometheus | **HAProxy**, que trae el exporter integrado y es un objeto de estudio en sí mismo |
 | **Roles de IAM propios** | El lab lo prohíbe (sección 3.1) | `LabInstanceProfile` |
 | **Bloqueo del state con DynamoDB** | Cada alumno trabaja en su propia cuenta | State local, o S3 si se usa `backend.tf.example` |
 | **Secrets Manager** | Tiene costo y no siempre está habilitado | `terraform.tfvars` fuera de git, o variables `TF_VAR_*` |

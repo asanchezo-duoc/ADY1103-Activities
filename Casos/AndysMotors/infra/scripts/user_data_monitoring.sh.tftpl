@@ -1,18 +1,16 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# Instancia de MONITOREO de Andys Motors (equivalente al ServerA de EA2/Act2-1).
+# Stack de monitoreo DE REFERENCIA: Prometheus + Grafana.
 #
-# Levanta Prometheus + Grafana y deja configurado el scraping (modelo PULL) de
-# los tres exporters que corren en la instancia de aplicacion:
+# Esta maquina solo existe cuando enable_monitoring = true. Si el ejercicio es
+# que el estudiante construya su propio stack, hay que dejarla apagada: el
+# entorno de Andys Motors expone la telemetria, y recolectarla es el trabajo.
 #
-#   node       :9100  sistema operativo del host
-#   nginx      :9113  sitio web, CRM y pagos
-#   postgres   :9187  base de datos central
+# Scrapea las cinco plataformas de negocio (que exponen /metrics en su propio
+# puerto) y el balanceador HAProxy, que trae su exporter integrado.
 #
-# La IP de la aplicacion se inyecta desde Terraform. Se usa la IP PRIVADA a
-# proposito: en AWS la IP privada se conserva cuando la instancia se detiene y
-# se vuelve a encender (que es justo lo que hace el Learner Lab al cerrar la
-# sesion), mientras que la publica cambia.
+# Se usan IP PRIVADAS: se conservan cuando la instancia se detiene y se vuelve a
+# encender, mientras que las publicas cambian.
 #
 # Los logs de este script quedan en /var/log/cloud-init-output.log
 # ---------------------------------------------------------------------------
@@ -21,7 +19,6 @@ set -euxo pipefail
 MON_DIR=/opt/monitoring
 COMPOSE_VERSION=v2.29.7
 
-# --- 1. Docker -------------------------------------------------------------
 dnf update -y
 dnf install -y docker
 systemctl enable --now docker
@@ -36,7 +33,6 @@ chmod +x "$CLI_PLUGINS/docker-compose"
 mkdir -p "$MON_DIR"/prometheus "$MON_DIR"/grafana/provisioning/datasources
 cd "$MON_DIR"
 
-# --- 2. Configuracion de Prometheus ----------------------------------------
 cat > prometheus/prometheus.yml <<PROM
 global:
   scrape_interval: 15s
@@ -47,30 +43,20 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # Sistema operativo de la instancia de aplicacion
-  - job_name: "node"
+  # Las cinco plataformas de negocio. Cada una expone sus metricas tecnicas y
+  # de negocio en el mismo puerto en el que atiende el trafico.
+  - job_name: "andys-plataformas"
     static_configs:
-      - targets: ["${app_private_ip}:9100"]
-        labels:
-          app: "andys-app"
-          rol: "servidor-observado"
+${targets_plataformas}
 
-  # Sitio web publico, CRM y pagos (nginx)
-  - job_name: "nginx"
+  # Balanceador de entrada. HAProxy trae el exporter de Prometheus integrado.
+  - job_name: "haproxy"
     static_configs:
-      - targets: ["${app_private_ip}:9113"]
+      - targets: ["${borde_ip}:8404"]
         labels:
-          app: "andys-web"
-
-  # Base de datos central
-  - job_name: "postgres"
-    static_configs:
-      - targets: ["${app_private_ip}:9187"]
-        labels:
-          app: "andys-db"
+          rol: "borde"
 PROM
 
-# --- 3. Datasource de Grafana autoprovisionado ------------------------------
 cat > grafana/provisioning/datasources/datasource.yml <<'GRAFANA'
 apiVersion: 1
 
@@ -83,7 +69,6 @@ datasources:
     editable: true
 GRAFANA
 
-# --- 4. Stack de contenedores ----------------------------------------------
 cat > docker-compose.yml <<'COMPOSE'
 services:
   prometheus:
@@ -128,7 +113,6 @@ COMPOSE
 sed -i "s|__GRAFANA_PASSWORD__|${grafana_password}|g" docker-compose.yml
 chmod 600 docker-compose.yml
 
-# --- 5. Arranque ------------------------------------------------------------
 docker compose up -d
 
 echo "=== Stack de monitoreo de ${project_name} levantado ==="

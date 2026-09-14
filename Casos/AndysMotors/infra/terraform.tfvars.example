@@ -14,7 +14,16 @@ admin_cidr = "TU.IP.PUBLICA.AQUI/32"
 db_password            = "CambiaEste.Password_123"
 grafana_admin_password = "CambiaEste.Grafana_123"
 
+# Token que protege el panel de inyeccion de fallas de cada plataforma.
+admin_token = "andys-lab"
+
 # --- Opcional (estos son los valores por defecto) ---------------------------
+
+# Como se reparten las plataformas entre servidores:
+#   "completa"  una maquina por plataforma del caso (6 servidores + balanceador)
+#   "compacta"  todas las plataformas en una maquina (1 servidor + balanceador)
+# El entorno desplegado es identico; cambia solo el reparto.
+# topologia = "completa"
 
 # aws_region        = "us-east-1"
 # project_name      = "andys-motors"
@@ -22,15 +31,18 @@ grafana_admin_password = "CambiaEste.Grafana_123"
 # instance_type     = "t3.micro"
 # root_volume_size  = 20
 
-# Segunda instancia con Prometheus + Grafana.
-# Ponerlo en false para un primer apply mas corto.
+# Instancia adicional con Prometheus + Grafana YA configurados, como referencia.
+#
+# Si el ejercicio es que el estudiante construya su propio stack de monitoreo,
+# hay que ponerlo en FALSE: el entorno solo expone telemetria, y recolectarla es
+# justamente el trabajo.
 # enable_monitoring = true
 
-# Abrir el puerto 80 a Internet (comportamiento real de un sitio publico).
-# En el laboratorio conviene dejarlo en false: solo entra admin_cidr.
+# Abrir el puerto 80 del balanceador a Internet (comportamiento real de un sitio
+# publico). En el laboratorio conviene dejarlo en false: solo entra admin_cidr.
 # allow_public_web  = false
 
-# Amazon RDS real en vez del contenedor PostgreSQL.
+# Amazon RDS real en vez del contenedor PostgreSQL de ServerData.
 # Leer la advertencia de la seccion "RDS" del README antes de encenderlo:
 # tarda entre 10 y 15 minutos y consume presupuesto.
 # enable_rds        = false

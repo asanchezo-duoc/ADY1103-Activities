@@ -21,7 +21,7 @@ que se trabajan las actividades de monitoreo en la nube de esta unidad.
 7. [Paso 3 - init y plan: mirar antes de crear](#7-paso-3---init-y-plan-mirar-antes-de-crear)
 8. [Paso 4 - apply: crear la infraestructura](#8-paso-4---apply-crear-la-infraestructura)
 9. [Paso 5 - Verificar la plataforma](#9-paso-5---verificar-la-plataforma)
-10. [Paso 6 - Verificar el monitoreo](#10-paso-6---verificar-el-monitoreo)
+10. [Paso 6 - Reconocer la telemetria disponible](#10-paso-6---reconocer-la-telemetria-disponible)
 11. [Paso 7 - La misma maquina, dos miradas](#11-paso-7---la-misma-maquina-dos-miradas)
 12. [Paso 8 - Leer el codigo](#12-paso-8---leer-el-codigo)
 13. [Paso 9 - Modificar la infraestructura](#13-paso-9---modificar-la-infraestructura)
@@ -51,41 +51,46 @@ Que seas capaz de:
 
 ## 2) Que vas a construir
 
-El caso describe seis plataformas. **No vas a crear seis servidores**: van a correr como
-contenedores sobre una sola instancia. Esa decision es deliberada y la analizaras en el
-Paso 8.
+El caso describe seis plataformas. Vas a desplegarlas como **aplicaciones reales**, cada una
+en su propio servidor, detras de un balanceador que es la unica puerta de entrada.
 
 ```
-                    +-------------------------------+
-                    |  Instancia de APLICACION      |
-                    |  (EC2 t3.micro)               |
-   Internet  --80-->|                               |
-                    |  nginx    sitio web / CRM /   |
-                    |           pagos               |
-                    |  postgres base de datos       |
-                    |                               |
-                    |  exporters:                   |
-                    |    9100 sistema operativo     |
-                    |    9113 nginx                 |
-                    |    9187 postgresql            |
-                    +-------------------------------+
-                          ^            |
-                   PULL   |            | archivos, imagenes,
-              (9100/9113/9187)         v respaldos, reportes
-                          |     +----------------+
-       +--------------------+   |   Amazon S3    |
-       | Instancia MONITOREO|   +----------------+
-       | Prometheus+Grafana |
-       +--------------------+
+                             +---------------------+
+        Internet  --- 80 --> |    ServerBorde      |
+                             |  HAProxy            |
+                             |  :8404/metrics      |
+                             +---------------------+
+                                       |
+            +--------------+-----------+-----------+--------------+
+            v              v           v           v              v
+     +-----------+  +-----------+ +-----------+ +-----------+ +-----------+
+     | ServerWeb |  |ServerStock| |ServerAgen.| | ServerCRM | |ServerPagos|
+     |   :8081   |  |   :8082   | |   :8083   | |   :8084   | |   :8085   |
+     +-----------+  +-----------+ +-----------+ +-----------+ +-----------+
+                            |           |           |             |
+                            +-----------+-----+-----+-------------+
+                                              v
+                                     +-----------------+
+                                     |   ServerData    |
+                                     |  PostgreSQL     |
+                                     +-----------------+
 ```
+
+Cada plataforma expone `/metrics` en su propio puerto, y HAProxy expone las suyas en el
+8404. **No hay Prometheus ni Grafana desplegados por defecto**: el entorno entrega
+telemetria, recolectarla es otro trabajo.
 
 | Recurso | Servicio AWS | Para que |
 |---|---|---|
-| Instancia de aplicacion | EC2 `t3.micro` | Sitio web, CRM, pagos y base de datos |
-| Instancia de monitoreo | EC2 `t3.micro` | Prometheus + Grafana |
-| Bucket de documentos | S3 | Archivos, imagenes de vehiculos, respaldos |
+| 6 servidores de plataforma | EC2 `t3.micro` | Sitio web, stock, agenda, CRM, pagos y base de datos |
+| Balanceador | EC2 `t3.micro` | HAProxy: entrada publica y metricas del borde |
+| Bucket de documentos | S3 | Archivos del negocio, y transporte del codigo a las instancias |
 | Reglas de acceso | Security Groups | Quien puede hablar con quien |
 | Base de datos (opcional) | RDS PostgreSQL | Paso 10 |
+
+> **Si la cuota de instancias de tu laboratorio no alcanza**, pon `topologia = "compacta"` en
+> `terraform.tfvars`: son 2 servidores en vez de 7, con el mismo entorno desplegado. La
+> seccion 3.5 del [README de `infra/`](../../Casos/AndysMotors/infra/README.md) lo explica.
 
 ## 3) Requisitos previos
 
@@ -142,7 +147,7 @@ consumiendo tu presupuesto. Por eso el state no se borra ni se sube a git.
 | | Terraform | Docker |
 |---|---|---|
 | Se encarga de | La infraestructura: maquinas, red, almacenamiento | Los servicios que corren dentro de las maquinas |
-| En esta actividad | EC2, S3, Security Groups | nginx, postgres, exporters, Prometheus, Grafana |
+| En esta actividad | EC2, S3, Security Groups | Las seis plataformas del caso, PostgreSQL y HAProxy |
 
 El puente entre ambos es el **`user_data`**: un script que EC2 ejecuta la primera vez que la
 instancia arranca, y que instala Docker y levanta los contenedores. Terraform lo genera a
@@ -242,80 +247,118 @@ comandos que necesitas. Puedes volver a verlas cuando quieras:
 
 ## 9) Paso 5 - Verificar la plataforma
 
-Con la IP que entrego `terraform output`:
+Con la IP del balanceador que entrego `terraform output`:
 
 ```bash
-# El sitio publico de Andys Motors
-curl -s http://<IP_APP>/health
-# {"status":"ok","servicio":"andys-motors-web"}
+# Portada del sitio publico
+curl -s http://<IP_BORDE>/
+
+# Catalogo: el sitio web pide los datos a la plataforma de stock
+curl -s http://<IP_BORDE>/api/catalogo
+
+# Un flujo de negocio completo: crea el cliente y su oportunidad en el CRM
+curl -s -X POST http://<IP_BORDE>/api/contacto \
+  -H 'Content-Type: application/json' \
+  -d '{"nombre":"Camila Rojas","monto_clp":18990000}'
 ```
 
-Abre tambien en el navegador `http://<IP_APP>` y navega a las secciones de CRM y pagos.
+La pagina de estado del balanceador muestra si cada plataforma esta viva:
 
-Si algo no responde, entra a mirar el arranque:
+```
+http://<IP_BORDE>:8404/stats
+```
+
+Si algo no responde, entra a mirar el arranque de esa maquina:
 
 ```bash
-ssh -i labsuser.pem ec2-user@<IP_APP>
+ssh -i labsuser.pem ec2-user@<IP_DE_ESA_MAQUINA>
 
 sudo tail -f /var/log/cloud-init-output.log     # avance del user_data
-cd /opt/andys && sudo docker compose ps         # contenedores
-
-# Los tres exporters
-curl -s localhost:9100/metrics | head -5        # sistema operativo
-curl -s localhost:9113/metrics | head -5        # nginx
-curl -s localhost:9187/metrics | head -5        # postgresql
+cd /opt/andys && sudo docker compose ps         # contenedores de esa plataforma
 ```
 
-Reconoceras el formato de texto plano con `# HELP` y `# TYPE` de
-[EA2/Act2-3](../../EA2/Act2-3): es exactamente el mismo, ahora producido por tres traductores
-distintos sobre la misma maquina.
+> El arranque toma entre 3 y 6 minutos: cada servidor instala Docker, descarga el entorno
+> desde S3 y construye la imagen de las aplicaciones.
 
-## 10) Paso 6 - Verificar el monitoreo
+## 10) Paso 6 - Reconocer la telemetria disponible
 
-1. Abre `http://<IP_MONITOREO>:9090/targets`. Deben aparecer **cuatro jobs en verde (UP)**:
-   `prometheus`, `node`, `nginx` y `postgres`.
-2. Prueba estas consultas en `http://<IP_MONITOREO>:9090/graph`:
+Antes de monitorear algo hay que saber que hay para monitorear. Ejecuta:
 
-```promql
-# CPU en uso de la instancia de aplicacion
-(1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100
-
-# Conexiones activas al sitio web
-nginx_connections_active
-
-# Conexiones abiertas contra la base de datos
-pg_stat_database_numbackends
+```bash
+terraform output endpoints_de_metricas
 ```
 
-3. Entra a Grafana en `http://<IP_MONITOREO>:3000` con usuario `admin` y tu
-   `grafana_admin_password`. El datasource **Prometheus** ya esta configurado: se
-   aprovisiono solo.
-4. Usa **Explore** para recorrer las metricas nuevas. Busca `nginx_` y `pg_` en el
-   explorador de metricas: son familias que no viste en EA2.
+Te devuelve las direcciones que habria que scrapear. Recorrelas a mano:
 
-> Si quieres ver los graficos moverse, genera trafico contra el sitio:
-> `for i in $(seq 1 200); do curl -s http://<IP_APP>/ > /dev/null; done`
+```bash
+# Metricas tecnicas y de negocio de una plataforma
+curl -s http://<IP_BORDE>/stock/api/stock > /dev/null       # genera algo de trafico
+ssh -i labsuser.pem ec2-user@<IP_STOCK> curl -s localhost:8082/metrics | grep -v '^#' | head -20
+
+# Metricas del balanceador: mas de 200 familias, sin instalar nada
+curl -s http://<IP_BORDE>:8404/metrics | grep -c '^# TYPE'
+curl -s http://<IP_BORDE>:8404/metrics | grep '^haproxy_server_status.*UP'
+```
+
+Identifica y anota, para cada plataforma, **una metrica tecnica y una de negocio**. El
+[catalogo completo](../../Casos/AndysMotors/demo/README.md#4-qué-telemetría-expone) esta en
+el README del entorno. Dos ejemplos:
+
+| Metrica | Que tipo es | Que responde |
+|---|---|---|
+| `http_requests_total{status_code="500"}` | tecnica | Esta fallando el servicio? |
+| `agendamientos_confirmados_total` | de negocio | Se estan registrando las visitas? |
+
+> **Nota importante**: no hay Prometheus desplegado. Si en tu `terraform.tfvars` dejaste
+> `enable_monitoring = true`, si lo hay, y puedes revisar `http://<IP_MONITOREO>:9090/targets`
+> como referencia. Construir tu propio stack es el objetivo de otra actividad.
 
 ## 11) Paso 7 - La misma maquina, dos miradas
 
 Esta es la observacion central de la unidad, y ahora la puedes hacer con datos propios.
 
-1. Entra a la consola de AWS > **CloudWatch** > **Metrics** > **EC2** > **Per-Instance
-   Metrics**, y busca tu instancia de aplicacion.
-2. Grafica `CPUUtilization`.
-3. En paralelo, grafica en tu Grafana la consulta de CPU del paso anterior.
+Primero genera trafico sostenido contra la plataforma:
 
-Responde, con evidencia:
+```bash
+cd ../../Casos/AndysMotors/demo
+./scripts/generar_trafico.py --url http://<IP_BORDE> --hora-inicio 10 --factor 1 --duracion 900
+```
+
+Mientras corre, abre la consola de AWS > **CloudWatch** > **Metrics** > **EC2** >
+**Per-Instance Metrics**, busca el servidor de la plataforma de agenda y grafica
+`CPUUtilization`. En paralelo, mira las metricas que expone esa misma maquina:
+
+```bash
+ssh -i labsuser.pem ec2-user@<IP_AGENDA> \
+  curl -s localhost:8083/metrics | grep -E '^agendamientos_'
+```
+
+Ahora rompe el negocio **sin tocar la infraestructura**:
+
+```bash
+export AGENDA_ADDR=<IP_PRIVADA_AGENDA>
+./scripts/escenario.sh activar agenda_silenciosa
+```
+
+Deja correr el trafico unos minutos mas y responde, con evidencia:
 
 | Pregunta |
 |---|
 | Que metricas de la instancia te entrega CloudWatch sin instalar nada? |
-| Cada cuanto tiempo publica CloudWatch un punto de datos, y cada cuanto lo hace tu Prometheus? |
-| Aparece el uso de **memoria RAM** en CloudWatch? Y en tu stack? A que se debe la diferencia? |
-| Puede CloudWatch decirte cuantas conexiones activas tiene nginx, o cuantas tiene la base de datos? |
-| Si el sitio web empieza a responder errores pero la CPU sigue normal, cual de las dos herramientas te entera? |
+| Cada cuanto publica CloudWatch un punto de datos? |
+| Aparece el uso de **memoria RAM** en CloudWatch? A que se debe? |
+| Cambio **algo** en CloudWatch cuando activaste `agenda_silenciosa`? Y en `haproxy_backend_http_responses_total{code="5xx"}`? |
+| Que le paso a `agendamientos_solicitados_total` frente a `agendamientos_confirmados_total`? |
+| Cuantos agendamientos se perdieron, y cuanto habria tardado el equipo en enterarse mirando solo CPU y memoria? |
 
-Guarda las capturas de ambos graficos: son la evidencia principal de esta actividad.
+Acuerdate de apagar el escenario al terminar:
+
+```bash
+./scripts/escenario.sh apagar-todo
+```
+
+Guarda las capturas de CloudWatch y de las metricas de negocio: son la evidencia principal
+de esta actividad.
 
 ## 12) Paso 8 - Leer el codigo
 
@@ -329,11 +372,14 @@ respuestas estan en los comentarios del propio codigo.
 | 3 | `security.tf` | El puerto 9100 no se abre a Internet. Desde donde se permite, y por que importa? |
 | 4 | `security.tf` | Por que los Security Groups se referencian entre si por ID y no por IP? |
 | 5 | `compute.tf` | Que hace `user_data_replace_on_change` y por que esta en `true`? |
-| 6 | `compute.tf` | La instancia de monitoreo usa la IP **privada** de la aplicacion. Por que no la publica? |
+| 6 | `locals.tf` | Por que las IP privadas se calculan con `cidrhost()` en vez de dejar que AWS las asigne? |
+| 6b | `locals.tf` | Que cambia entre `topologia = "completa"` y `"compacta"`, y que NO cambia? |
+| 6c | `storage.tf` | Por que el codigo del entorno viaja por S3, y no clonando el repositorio ni dentro del `user_data`? |
 | 7 | `storage.tf` | Que hace `force_destroy` y por que tiene sentido en un laboratorio? |
 | 8 | `storage.tf` | Que problema evita el bloque `public_access_block`? |
 | 9 | `variables.tf` | Por que `db_password` no admite los caracteres `/`, `@` ni `"`? |
 | 10 | `database.tf` | Por que `enable_rds` viene apagado por defecto? Da las tres razones. |
+| 11 | `borde/haproxy.cfg` (en `demo/`) | Que hace `init-addr last,libc,none` y que problema evita? |
 
 ## 13) Paso 9 - Modificar la infraestructura
 
@@ -418,11 +464,11 @@ comando, y volver a levantarlo identico cuesta otro.
 1. Captura de la salida de `terraform plan`, mostrando la linea `Plan: N to add`.
 2. Captura de `terraform apply` terminado, con las salidas (`outputs`).
 3. Captura del sitio de Andys Motors respondiendo en el navegador.
-4. Captura de `/targets` de Prometheus con los cuatro jobs en **UP**.
-5. Captura de un panel de Grafana con una metrica de `nginx_` o `pg_`.
-6. **Las dos capturas del Paso 7**: la misma instancia vista por CloudWatch y vista por tu
-   propio stack, con las respuestas escritas a las cinco preguntas.
-7. Respuestas a las 10 preguntas de lectura de codigo del Paso 8.
+4. Captura de `http://<IP_BORDE>:8404/stats` con todas las plataformas en verde.
+5. Una metrica tecnica y una de negocio por plataforma, anotadas (Paso 6).
+6. **Las capturas del Paso 7**: CPU en CloudWatch y los contadores de negocio de agenda,
+   antes y despues de activar `agenda_silenciosa`, con las seis preguntas respondidas.
+7. Respuestas a las preguntas de lectura de codigo del Paso 8.
 8. Captura del `plan` del Paso 9c, donde se ve `forces replacement`.
 9. Captura de `terraform destroy` completado.
 
@@ -437,8 +483,9 @@ Los cuatro que veras casi seguro:
 |---|---|
 | `ExpiredToken` | Copiar de nuevo las credenciales del panel **AWS Details** (Paso 1) |
 | `InvalidKeyPair.NotFound` | Descargar `labsuser.pem`, o ajustar `key_name` al nombre real |
-| El sitio no responde recien aplicado | Esperar 2-4 minutos: el `user_data` sigue corriendo |
-| Targets en **DOWN** | Los contenedores aun no arrancan. Revisar `docker compose ps` en la instancia |
+| El sitio no responde recien aplicado | Esperar 3-6 minutos: el `user_data` sigue corriendo |
+| Una plataforma sale DOWN en `:8404/stats` | Sus contenedores aun no arrancan. Revisar `docker compose ps` en esa maquina |
+| `VcpuLimitExceeded` al aplicar | La topologia completa pide 7 u 8 instancias: usar `topologia = "compacta"` |
 
 ## 18) Checklist de verificacion
 
@@ -447,12 +494,14 @@ Los cuatro que veras casi seguro:
 - [ ] `./scripts/tf.sh init` completado sin errores.
 - [ ] `plan` leido y entendido **antes** del primer `apply`.
 - [ ] `apply` completado y salidas registradas.
-- [ ] El sitio de Andys Motors responde, incluyendo `/health`.
-- [ ] Los tres exporters responden en la instancia de aplicacion (9100, 9113, 9187).
-- [ ] Los cuatro jobs aparecen **UP** en Prometheus.
-- [ ] Grafana entra y el datasource Prometheus ya existe sin configurarlo.
-- [ ] Comparacion CloudWatch contra stack propio hecha, con las cinco preguntas respondidas.
-- [ ] Las 10 preguntas de lectura de codigo respondidas.
+- [ ] El sitio de Andys Motors responde por el balanceador.
+- [ ] Un flujo de negocio completo (`POST /api/contacto`) funciona de punta a punta.
+- [ ] Todas las plataformas aparecen en verde en `:8404/stats`.
+- [ ] `terraform output endpoints_de_metricas` listado y recorrido a mano.
+- [ ] Identificada una metrica tecnica y una de negocio por plataforma.
+- [ ] Escenario `agenda_silenciosa` activado, observado y vuelto a apagar.
+- [ ] Comparacion CloudWatch contra metricas de negocio, con las seis preguntas respondidas.
+- [ ] Las preguntas de lectura de codigo respondidas.
 - [ ] Idempotencia comprobada: un `plan` sin cambios dice `No changes`.
 - [ ] Diferencia entre un cambio en caliente y uno que fuerza reemplazo, comprobada.
 - [ ] `terraform destroy` ejecutado y consola de AWS revisada sin recursos sobrantes.

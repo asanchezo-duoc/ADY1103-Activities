@@ -9,5 +9,11 @@ terraform {
       # actividad a mitad de semestre. Si se sube, revisar primero el changelog.
       version = "~> 5.70"
     }
+    archive = {
+      source = "hashicorp/archive"
+      # Empaqueta la carpeta demo/ para subirla a S3, desde donde cada servidor
+      # la descarga al arrancar.
+      version = "~> 2.4"
+    }
   }
 }

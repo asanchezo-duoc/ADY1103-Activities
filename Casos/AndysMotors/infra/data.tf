@@ -50,3 +50,9 @@ data "aws_ami" "al2023" {
     values = ["hvm"]
   }
 }
+
+# CIDR de la subred elegida, necesario para calcular las IP privadas fijas de
+# cada servidor (ver locals.tf).
+data "aws_subnet" "elegida" {
+  id = local.subnet_ids[0]
+}

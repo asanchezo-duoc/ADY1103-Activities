@@ -38,8 +38,10 @@ resource "aws_db_instance" "main" {
   password = var.db_password
   port     = 5432
 
-  db_subnet_group_name   = aws_db_subnet_group.main[0].name
-  vpc_security_group_ids = [aws_security_group.rds[0].id]
+  db_subnet_group_name = aws_db_subnet_group.main[0].name
+  # Se reutiliza el Security Group de datos: las reglas son las mismas tanto si
+  # la base corre en RDS como si corre en el contenedor de ServerData.
+  vpc_security_group_ids = [aws_security_group.datos.id]
 
   # La base de datos nunca se expone a Internet: solo la alcanza la instancia de
   # aplicacion, a traves del Security Group.

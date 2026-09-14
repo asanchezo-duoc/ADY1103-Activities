@@ -1,43 +1,67 @@
 # ---------------------------------------------------------------------------
 # Instancias EC2
 #
-# Las seis cajas del diagrama del caso (sitio web, CRM, stock, agendamiento,
-# pagos y base de datos) NO necesitan seis instancias: corren como contenedores
-# sobre una sola maquina. Eso mantiene el laboratorio dentro del presupuesto y
-# del limite de instancias del Learner Lab.
+# Un solo recurso con for_each cubre las dos topologias: en "completa" crea una
+# maquina por plataforma del caso, y en "compacta" crea una sola con todas.
+# El mapa que decide esto vive en locals.tf.
+#
+# Cada servidor recibe las direcciones de TODOS los demas, porque las IP
+# privadas se fijan por adelantado. Sin eso, Terraform tendria que leer la IP de
+# una instancia para poder construir otra del mismo recurso, que es una
+# referencia circular imposible de resolver.
 # ---------------------------------------------------------------------------
 
 locals {
-  # Se ordenan los IDs para que el subnet elegido sea siempre el mismo entre
-  # ejecuciones: aws_subnets devuelve un conjunto sin orden garantizado.
   subnet_ids = sort(data.aws_subnets.default.ids)
 
-  # Destino de la base de datos que se le entrega a la aplicacion: el endpoint
-  # de RDS cuando existe, o el contenedor "db" de la propia instancia cuando no.
-  db_host = var.enable_rds ? aws_db_instance.main[0].address : "db"
+  # Security Group que corresponde a cada rol.
+  sg_de_rol = {
+    "aplicacion"    = aws_security_group.app.id
+    "base-de-datos" = aws_security_group.datos.id
+    "borde"         = aws_security_group.borde.id
+  }
 }
 
-resource "aws_instance" "app" {
+resource "aws_instance" "servidor" {
+  for_each = local.servidores
+
   ami                         = data.aws_ami.al2023.id
   instance_type               = var.instance_type
   subnet_id                   = local.subnet_ids[0]
-  vpc_security_group_ids      = [aws_security_group.app.id]
+  private_ip                  = local.ips[each.key]
+  vpc_security_group_ids      = [local.sg_de_rol[each.value.rol]]
   iam_instance_profile        = data.aws_iam_instance_profile.lab.name
   key_name                    = var.key_name
   associate_public_ip_address = true
 
-  user_data = templatefile("${path.module}/scripts/user_data_app.sh.tftpl", {
+  user_data = templatefile("${path.module}/scripts/user_data_servidor.sh.tftpl", {
     project_name = var.project_name
-    use_rds      = var.enable_rds
-    db_host      = local.db_host
-    db_name      = var.db_name
-    db_user      = var.db_username
-    db_password  = var.db_password
+    perfiles     = each.value.perfiles
+    region       = var.aws_region
+    bucket       = aws_s3_bucket.documentos.bucket
+    objeto       = aws_s3_object.demo.key
+
+    db_host     = local.db_host
+    db_name     = var.db_name
+    db_user     = var.db_username
+    db_password = var.db_password
+    admin_token = var.admin_token
+
+    web_host    = local.host_de["web"]
+    web_port    = local.puertos["web"]
+    stock_host  = local.host_de["stock"]
+    stock_port  = local.puertos["stock"]
+    agenda_host = local.host_de["agenda"]
+    agenda_port = local.puertos["agenda"]
+    crm_host    = local.host_de["crm"]
+    crm_port    = local.puertos["crm"]
+    pagos_host  = local.host_de["pagos"]
+    pagos_port  = local.puertos["pagos"]
   })
 
-  # Cambiar el script de arranque recrea la instancia. Es lo correcto en un
-  # laboratorio: el user_data solo se ejecuta en el primer arranque, asi que sin
-  # esto una edicion del template no tendria ningun efecto visible.
+  # Si cambia el script de arranque, la instancia se recrea. Es lo correcto en
+  # un laboratorio: el user_data solo se ejecuta en el primer arranque, asi que
+  # sin esto una edicion no tendria ningun efecto.
   user_data_replace_on_change = true
 
   root_block_device {
@@ -53,26 +77,40 @@ resource "aws_instance" "app" {
   }
 
   tags = {
-    Name = "${var.project_name}-app"
-    Rol  = "aplicacion"
+    Name     = "${var.project_name}-${each.key}"
+    Rol      = each.value.rol
+    Perfiles = each.value.perfiles
   }
+
+  # El contenido del entorno debe estar en el bucket antes de que la maquina
+  # intente descargarlo.
+  depends_on = [aws_s3_object.demo]
 }
 
-resource "aws_instance" "monitoring" {
+# ---------------------------------------------------------------------------
+# Stack de monitoreo de referencia (opcional)
+# ---------------------------------------------------------------------------
+resource "aws_instance" "monitoreo" {
   count = var.enable_monitoring ? 1 : 0
 
   ami                         = data.aws_ami.al2023.id
   instance_type               = var.instance_type
   subnet_id                   = local.subnet_ids[0]
-  vpc_security_group_ids      = [aws_security_group.monitoring[0].id]
+  vpc_security_group_ids      = [aws_security_group.monitoreo[0].id]
   iam_instance_profile        = data.aws_iam_instance_profile.lab.name
   key_name                    = var.key_name
   associate_public_ip_address = true
 
   user_data = templatefile("${path.module}/scripts/user_data_monitoring.sh.tftpl", {
     project_name     = var.project_name
-    app_private_ip   = aws_instance.app.private_ip
     grafana_password = var.grafana_admin_password
+    borde_ip         = local.ips["borde"]
+    # Se arma el bloque YAML de targets ya indentado, para que el archivo de
+    # Prometheus quede valido.
+    targets_plataformas = join("\n", [
+      for plataforma, puerto in local.puertos :
+      "      - targets: [\"${local.host_de[plataforma]}:${puerto}\"]\n        labels:\n          plataforma: \"${plataforma}\""
+    ])
   })
 
   user_data_replace_on_change = true
@@ -90,7 +128,7 @@ resource "aws_instance" "monitoring" {
   }
 
   tags = {
-    Name = "${var.project_name}-monitoring"
+    Name = "${var.project_name}-monitoreo"
     Rol  = "monitoreo"
   }
 }

@@ -1,0 +1,96 @@
+#!/bin/bash
+# ---------------------------------------------------------------------------
+# Arranque de un servidor de la plataforma Andys Motors.
+#
+# El mismo script sirve para los siete roles. Lo que cambia es la variable
+# PERFILES, que decide que plataformas levanta esta maquina:
+#
+#   data    base de datos central
+#   stock   consulta de stock de vehiculos
+#   agenda  agendamiento de visitas
+#   crm     CRM y sistema de ventas
+#   pagos   sistema de pagos y proveedor externo
+#   web     sitio web publico
+#   borde   balanceador HAProxy
+#
+# El codigo del entorno viaja por S3: Terraform empaqueta la carpeta demo/, la
+# sube al bucket, y esta maquina la descarga usando el perfil de instancia del
+# laboratorio. Asi el repositorio no necesita ser publico.
+#
+# Los logs de este script quedan en /var/log/cloud-init-output.log
+# ---------------------------------------------------------------------------
+set -euxo pipefail
+
+PERFILES="${perfiles}"
+DESTINO=/opt/andys
+COMPOSE_VERSION=v2.29.7
+
+# --- 1. Dependencias --------------------------------------------------------
+dnf update -y
+dnf install -y docker unzip
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
+CLI_PLUGINS=/usr/local/lib/docker/cli-plugins
+mkdir -p "$CLI_PLUGINS"
+curl -fsSL "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64" \
+  -o "$CLI_PLUGINS/docker-compose"
+chmod +x "$CLI_PLUGINS/docker-compose"
+
+# Amazon Linux 2023 suele traer la CLI de AWS, pero no en todas las AMI.
+if ! command -v aws >/dev/null 2>&1; then
+  dnf install -y awscli-2 || dnf install -y aws-cli
+fi
+
+# --- 2. Descargar el entorno ------------------------------------------------
+mkdir -p "$DESTINO"
+aws s3 cp "s3://${bucket}/${objeto}" /tmp/demo.zip --region "${region}"
+unzip -o -q /tmp/demo.zip -d "$DESTINO"
+cd "$DESTINO"
+
+# --- 3. Configuracion -------------------------------------------------------
+# El .env se genera aqui con las direcciones que Terraform ya conoce, porque las
+# IP privadas se fijan por adelantado (ver locals.tf).
+cat > .env <<ENV
+DB_NAME=${db_name}
+DB_USER=${db_user}
+DB_PASSWORD=${db_password}
+ANDYS_ADMIN_TOKEN=${admin_token}
+
+DB_HOST=${db_host}
+DB_PORT=5432
+
+WEB_HOST=${web_host}
+WEB_PORT=${web_port}
+STOCK_HOST=${stock_host}
+STOCK_PORT=${stock_port}
+AGENDA_HOST=${agenda_host}
+AGENDA_PORT=${agenda_port}
+CRM_HOST=${crm_host}
+CRM_PORT=${crm_port}
+PAGOS_HOST=${pagos_host}
+PAGOS_PORT=${pagos_port}
+GATEWAY_HOST=${pagos_host}
+GATEWAY_PORT=8086
+ENV
+chmod 600 .env
+
+# --- 4. Construir la imagen, solo si esta maquina corre aplicaciones ---------
+# ServerData y ServerBorde usan imagenes oficiales (postgres y haproxy) y no
+# necesitan construir nada.
+if echo "$PERFILES" | grep -qE 'stock|agenda|crm|pagos|web'; then
+  docker build -t andys-motors:local ./app
+fi
+
+# --- 5. Levantar los perfiles de esta maquina -------------------------------
+ARGS=""
+for perfil in $(echo "$PERFILES" | tr ',' ' '); do
+  ARGS="$ARGS --profile $perfil"
+done
+
+# shellcheck disable=SC2086
+docker compose $ARGS up -d
+
+echo "=== ${project_name}: perfiles [$PERFILES] levantados ==="
+# shellcheck disable=SC2086
+docker compose $ARGS ps

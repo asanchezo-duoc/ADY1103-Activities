@@ -45,12 +45,47 @@ variable "admin_cidr" {
 
 variable "allow_public_web" {
   description = <<-EOT
-    Si es true, el puerto 80 del sitio web queda abierto a Internet (0.0.0.0/0),
-    que es el comportamiento real de un sitio publico. Si es false (recomendado
-    para el laboratorio), solo se abre hacia admin_cidr.
+    Si es true, el puerto 80 del balanceador queda abierto a Internet
+    (0.0.0.0/0), que es el comportamiento real de un sitio publico. Si es false
+    (recomendado para el laboratorio), solo se abre hacia admin_cidr.
   EOT
   type        = bool
   default     = false
+}
+
+variable "topologia" {
+  description = <<-EOT
+    Como se reparten las plataformas del caso entre servidores.
+
+      "completa"  una maquina por plataforma, como describe el caso. Son seis
+                  servidores mas el balanceador (siete, u ocho con el stack de
+                  monitoreo de referencia).
+
+      "compacta"  todas las plataformas en una maquina, mas el balanceador.
+                  Mismo entorno y mismos perfiles de Compose; sirve cuando la
+                  cuota de instancias del laboratorio no alcanza.
+
+    El codigo desplegado es identico en ambos casos: cambia solo que perfiles
+    levanta cada maquina.
+  EOT
+  type        = string
+  default     = "completa"
+
+  validation {
+    condition     = contains(["completa", "compacta"], var.topologia)
+    error_message = "topologia debe ser \"completa\" o \"compacta\"."
+  }
+}
+
+variable "admin_token" {
+  description = <<-EOT
+    Token que protege el panel de inyeccion de fallas (/admin/fallas) de cada
+    plataforma. Sin el, cualquiera que alcance el puerto podria romper el
+    entorno.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = "andys-lab"
 }
 
 # ---------------------------------------------------------------------------
@@ -65,8 +100,12 @@ variable "instance_type" {
 
 variable "enable_monitoring" {
   description = <<-EOT
-    Levanta una segunda instancia con Prometheus + Grafana (equivalente al ServerA
-    de EA2/Act2-1). Ponerlo en false para un primer apply mas corto.
+    Levanta una instancia adicional con Prometheus + Grafana ya configurados,
+    como referencia.
+
+    IMPORTANTE: si el ejercicio es que el estudiante construya su propio stack
+    de monitoreo, hay que ponerlo en **false**. El entorno de Andys Motors solo
+    expone telemetria; recolectarla y visualizarla es justamente el trabajo.
   EOT
   type        = bool
   default     = true
