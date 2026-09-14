@@ -66,10 +66,13 @@ def main() -> None:
     print(f"Generando trafico contra {base_url} durante {args.duration}s a ~{args.rps} req/s "
           f"(error_ratio={args.error_ratio})...")
 
-    start = time.time()
+    # time.monotonic() y no time.time(): el reloj de pared puede saltar (NTP,
+    # suspension de la maquina, WSL2) y un salto hacia adelante cortaria la
+    # generacion de trafico antes de tiempo. El reloj monotono solo avanza.
+    start = time.monotonic()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = []
-        while time.time() - start < args.duration:
+        while time.monotonic() - start < args.duration:
             url = pick_endpoint(base_url, args.error_ratio)
             futures.append(pool.submit(hit, url))
             time.sleep(interval)

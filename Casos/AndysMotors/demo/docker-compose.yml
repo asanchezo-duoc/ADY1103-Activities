@@ -1,0 +1,177 @@
+# Entorno de demostracion de Andys Motors.
+#
+# Un solo archivo para los dos modos de despliegue, usando PERFILES de Compose:
+#
+#   Todo en una maquina (pruebas locales):
+#     docker build -t andys-motors:local ./app
+#     docker compose --profile todo up -d
+#
+#   Repartido en seis servidores (el despliegue del caso): en cada servidor se
+#   copia esta misma carpeta, se ajusta el .env con las IP de los demas, y se
+#   levanta solo el perfil que le corresponde:
+#     ServerData    docker compose --profile data   up -d
+#     ServerStock   docker compose --profile stock  up -d
+#     ServerAgenda  docker compose --profile agenda up -d
+#     ServerCRM     docker compose --profile crm    up -d
+#     ServerPagos   docker compose --profile pagos  up -d
+#     ServerWeb     docker compose --profile web    up -d
+#     ServerBorde   docker compose --profile borde  up -d
+#
+# IMPORTANTE: aqui NO hay Prometheus ni Grafana. Este es el entorno a observar;
+# el stack de monitoreo lo construye cada estudiante.
+
+# Configuracion comun a las seis plataformas, para no repetirla seis veces.
+x-api: &api
+  # La imagen es la MISMA para las seis plataformas: cambia solo la variable
+  # SERVICIO. Se construye una vez, antes de levantar:
+  #
+  #   docker build -t andys-motors:local ./app
+  #
+  # No se declara "build:" aqui a proposito: seis servicios apuntando a la misma
+  # etiqueta harian que Compose intente construirla seis veces en paralelo y
+  # falle al exportarla.
+  image: andys-motors:local
+  restart: unless-stopped
+  environment: &api-env
+    ANDYS_ADMIN_TOKEN: ${ANDYS_ADMIN_TOKEN:-andys-lab}
+    DB_HOST: ${DB_HOST:-postgres}
+    DB_PORT: ${DB_PORT:-5432}
+    DB_NAME: ${DB_NAME:-andysmotors}
+    DB_USER: ${DB_USER:-andysadmin}
+    DB_PASSWORD: ${DB_PASSWORD:-cambiame}
+  networks: [andys]
+
+services:
+  # ---------------------------------------------------------------- ServerData
+  postgres:
+    image: postgres:16-alpine
+    container_name: andys-postgres
+    restart: unless-stopped
+    profiles: [data, todo]
+    environment:
+      POSTGRES_DB: ${DB_NAME:-andysmotors}
+      POSTGRES_USER: ${DB_USER:-andysadmin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cambiame}
+    ports:
+      # Puerto PUBLICADO en el host. Se separa del puerto de conexion porque es
+      # frecuente que la maquina ya tenga un PostgreSQL en el 5432.
+      - "${DB_PUBLISH_PORT:-5432}:5432"
+    volumes:
+      - datos_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-andysadmin} -d ${DB_NAME:-andysmotors}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [andys]
+
+  # --------------------------------------------------------------- ServerStock
+  stock-api:
+    <<: *api
+    container_name: andys-stock-api
+    profiles: [stock, todo]
+    environment:
+      <<: *api-env
+      SERVICIO: stock
+      PORT: 8082
+    ports:
+      - "8082:8082"
+
+  # -------------------------------------------------------------- ServerAgenda
+  agenda-api:
+    <<: *api
+    container_name: andys-agenda-api
+    profiles: [agenda, todo]
+    environment:
+      <<: *api-env
+      SERVICIO: agenda
+      PORT: 8083
+    ports:
+      - "8083:8083"
+
+  # ----------------------------------------------------------------- ServerCRM
+  crm-api:
+    <<: *api
+    container_name: andys-crm-api
+    profiles: [crm, todo]
+    environment:
+      <<: *api-env
+      SERVICIO: crm
+      PORT: 8084
+    ports:
+      - "8084:8084"
+
+  # --------------------------------------------------------------- ServerPagos
+  # El proveedor externo vive junto a pagos porque es su unica dependencia.
+  pagos-api:
+    <<: *api
+    container_name: andys-pagos-api
+    profiles: [pagos, todo]
+    environment:
+      <<: *api-env
+      SERVICIO: pagos
+      PORT: 8085
+      GATEWAY_HOST: ${GATEWAY_HOST:-gateway-externo}
+      GATEWAY_PORT: ${GATEWAY_PORT:-8086}
+    ports:
+      - "8085:8085"
+
+  gateway-externo:
+    <<: *api
+    container_name: andys-gateway-externo
+    profiles: [pagos, todo]
+    environment:
+      <<: *api-env
+      SERVICIO: gateway
+      PORT: 8086
+    ports:
+      - "8086:8086"
+
+  # ----------------------------------------------------------------- ServerWeb
+  web-api:
+    <<: *api
+    container_name: andys-web-api
+    profiles: [web, todo]
+    environment:
+      <<: *api-env
+      SERVICIO: web
+      PORT: 8081
+      STOCK_HOST: ${STOCK_HOST:-stock-api}
+      STOCK_PORT: ${STOCK_PORT:-8082}
+      AGENDA_HOST: ${AGENDA_HOST:-agenda-api}
+      AGENDA_PORT: ${AGENDA_PORT:-8083}
+      CRM_HOST: ${CRM_HOST:-crm-api}
+      CRM_PORT: ${CRM_PORT:-8084}
+    ports:
+      - "8081:8081"
+
+  # --------------------------------------------------------------- ServerBorde
+  haproxy:
+    image: haproxy:3.0-alpine
+    container_name: andys-haproxy
+    restart: unless-stopped
+    profiles: [borde, todo]
+    environment:
+      WEB_HOST: ${WEB_HOST:-web-api}
+      WEB_PORT: ${WEB_PORT:-8081}
+      STOCK_HOST: ${STOCK_HOST:-stock-api}
+      STOCK_PORT: ${STOCK_PORT:-8082}
+      AGENDA_HOST: ${AGENDA_HOST:-agenda-api}
+      AGENDA_PORT: ${AGENDA_PORT:-8083}
+      CRM_HOST: ${CRM_HOST:-crm-api}
+      CRM_PORT: ${CRM_PORT:-8084}
+      PAGOS_HOST: ${PAGOS_HOST:-pagos-api}
+      PAGOS_PORT: ${PAGOS_PORT:-8085}
+    volumes:
+      - ./borde/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "80:80"      # entrada publica
+      - "8404:8404"  # metricas Prometheus y pagina de stats
+    networks: [andys]
+
+networks:
+  andys:
+    driver: bridge
+
+volumes:
+  datos_postgres:

@@ -1,0 +1,10 @@
+# Configuracion real del entorno (usar .env.example como plantilla): contiene
+# el password de la base de datos y el token de administracion.
+.env
+
+# Dependencias instaladas dentro del contenedor, nunca en el repositorio.
+app/node_modules/
+
+# Cache de Python, generada al importar los scripts.
+__pycache__/
+*.pyc

@@ -87,6 +87,17 @@ Consideraciones adicionales sobre la operación:
 
 ---
 
+## Entorno de demostración
+
+La carpeta [`demo/`](./demo) contiene la plataforma del caso **desplegada como software
+real**: las seis plataformas del negocio como APIs instrumentadas para Prometheus, la base
+de datos central, un balanceador HAProxy como puerta de entrada, un generador de tráfico que
+sigue la curva horaria descrita más abajo, y escenarios de falla que se encienden en
+caliente.
+
+Se levanta con Docker Compose, en una máquina o repartido en seis servidores. **No incluye
+Prometheus ni Grafana**: expone la telemetría, y el stack de monitoreo se construye encima.
+
 ## Infraestructura del caso
 
 La carpeta [`infra/`](./infra) contiene el código **Terraform** que levanta esta misma
