@@ -36,7 +36,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -102,7 +102,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[20m])) * 100)",
           "refId": "A"
@@ -114,7 +114,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -180,7 +180,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
           "refId": "A"
@@ -192,7 +192,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -254,7 +254,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "100 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"} * 100)",
           "legendFormat": "{{mountpoint}}",
@@ -279,7 +279,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -361,7 +361,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[20m])",
           "legendFormat": "rx {{device}}",
@@ -370,7 +370,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[20m])",
           "legendFormat": "tx {{device}}",
@@ -383,7 +383,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -465,7 +465,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "node_load1",
           "legendFormat": "load1",
@@ -474,7 +474,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "node_load5",
           "legendFormat": "load5",
@@ -483,7 +483,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "node_load15",
           "legendFormat": "load15",
@@ -496,7 +496,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -545,7 +545,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "time() - node_boot_time_seconds",
           "refId": "A"
@@ -557,7 +557,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -606,7 +606,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "prometheus"
           },
           "expr": "up{job=\"host\"}",
           "refId": "A"
