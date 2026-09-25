@@ -1,0 +1,25 @@
+services:
+  api-test:
+    image: api-test:latest
+    container_name: serverB-api-test
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - serverBnet
+
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - "9200:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - serverBnet 
+
+networks:
+  serverBnet:
+    driver: bridge
+
