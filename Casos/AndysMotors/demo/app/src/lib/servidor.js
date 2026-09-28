@@ -6,6 +6,7 @@
 
 const express = require("express");
 const crypto = require("crypto");
+const path = require("path");
 
 const { register, httpRequestsTotal, httpRequestDuration } = require("./metrics");
 const logger = require("./logger");
@@ -26,6 +27,7 @@ function normalizarRuta(req) {
 function crearApp(configurarRutas) {
   const app = express();
   app.use(express.json());
+  app.use(express.static(path.join(__dirname, "../../public"), { index: false }));
 
   // --- Middleware de observabilidad ---------------------------------------
   app.use((req, res, next) => {
@@ -67,6 +69,10 @@ function crearApp(configurarRutas) {
       uptime_segundos: Math.round(process.uptime()),
     });
   });
+
+  if (SERVICIO !== "web") {
+    app.get("/", (req, res) => res.sendFile(path.join(__dirname, "../../public/panel.html")));
+  }
 
   app.get("/metrics", async (req, res) => {
     res.set("Content-Type", register.contentType);

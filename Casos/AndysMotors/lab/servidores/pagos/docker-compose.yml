@@ -1,0 +1,15 @@
+services:
+  gateway:
+    image: andys-motors:local
+    container_name: andys-server-gateway
+    restart: unless-stopped
+    environment: { SERVICIO: gateway, PORT: 8086, DB_HOST: host.docker.internal, DB_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["8086:8086"]
+  pagos:
+    image: andys-motors:local
+    container_name: andys-server-pagos
+    restart: unless-stopped
+    environment: { SERVICIO: pagos, PORT: 8085, GATEWAY_HOST: host.docker.internal, GATEWAY_PORT: 8086, DB_HOST: host.docker.internal, DB_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["8085:8085"]

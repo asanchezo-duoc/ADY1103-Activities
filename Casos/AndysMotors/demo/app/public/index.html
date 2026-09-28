@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Andys Motors · Muévete distinto</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;600;700;800&display=swap');
+    :root{--ink:#17211d;--muted:#6d756f;--cream:#f3f0e8;--lime:#d9f36b;--orange:#ff7048;--line:#d6d8cc}
+    *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Manrope, sans-serif}
+    header{display:flex;align-items:center;justify-content:space-between;padding:25px 6vw;border-bottom:1px solid var(--line)}
+    .brand{font-weight:800;letter-spacing:-.06em;font-size:1.35rem}.brand i{display:inline-block;background:var(--orange);width:9px;height:9px;border-radius:50%;margin-left:5px}
+    nav{display:flex;gap:26px;font:500 .75rem 'DM Mono',monospace;text-transform:uppercase}nav a{color:inherit;text-decoration:none}
+    .hero{min-height:500px;padding:8vw 6vw 6vw;position:relative;overflow:hidden;background:var(--ink);color:var(--cream)}
+    .hero:after{content:'';position:absolute;width:47vw;height:47vw;border:1px solid #65716a;border-radius:50%;right:-9vw;top:-20vw;box-shadow:0 0 0 50px #65716a22,0 0 0 100px #65716a11}
+    .eyebrow{color:var(--lime);font:500 .72rem 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.12em}.hero h1{font-size:clamp(3.5rem,9vw,8.6rem);line-height:.88;letter-spacing:-.09em;max-width:800px;margin:25px 0;position:relative;z-index:1}.hero h1 em{color:var(--lime);font-style:normal}.hero p{max-width:390px;color:#c0c8bf;line-height:1.7;position:relative;z-index:1}.cta{display:inline-block;background:var(--lime);color:var(--ink);padding:15px 21px;margin-top:15px;border-radius:3px;font-weight:800;text-decoration:none;position:relative;z-index:1}
+    main{padding:72px 6vw}.section-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:30px}.section-head h2{font-size:clamp(2rem,4vw,4rem);letter-spacing:-.07em;margin:0}.section-head span{font:500 .7rem 'DM Mono';color:var(--muted)}
+    #catalogo{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px}.car{background:#fff;border:1px solid var(--line);padding:22px;min-height:220px;display:flex;flex-direction:column;justify-content:space-between;transition:transform .2s}.car:hover{transform:translateY(-5px)}.car .num{font:500 .72rem 'DM Mono';color:var(--orange)}.car h3{font-size:1.35rem;margin:12px 0 4px;letter-spacing:-.05em}.car p{color:var(--muted);font-size:.85rem;margin:0}.price{font-weight:800;margin-top:20px}.tag{font:500 .65rem 'DM Mono';text-transform:uppercase;background:var(--lime);padding:6px 8px;align-self:flex-start}
+    .contact{background:var(--orange);padding:45px;display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:80px}.contact h2{font-size:clamp(2rem,4vw,4rem);line-height:.95;letter-spacing:-.07em;margin:0}.contact form{display:grid;gap:12px}input,button{font:inherit;padding:14px;border:0}input{background:#fff}button{background:var(--ink);color:#fff;font-weight:800;cursor:pointer}.status{font:500 .75rem 'DM Mono';min-height:18px}footer{padding:30px 6vw;font:500 .7rem 'DM Mono';color:var(--muted);display:flex;justify-content:space-between}
+    @media(max-width:650px){nav{display:none}.contact{grid-template-columns:1fr;padding:28px}.hero{min-height:540px}}
+  </style>
+</head>
+<body>
+  <header><div class="brand">ANDYS MOTORS<i></i></div><nav><a href="#catalogo">Inventario</a><a href="#contacto">Hablemos</a><a href="#equipo">Portal empleados</a></nav></header>
+  <section class="hero"><div class="eyebrow">Santiago · Providencia · Maipú · Concepción</div><h1>Tu próxima<br><em>historia</em><br>empieza aquí.</h1><p>Vehículos seleccionados, atención humana y el respaldo para moverte con confianza. Conoce nuestro inventario.</p><a class="cta" href="#catalogo">Ver vehículos ↓</a></section>
+  <main><div class="section-head"><h2>En vitrina</h2><span id="contador">Cargando inventario...</span></div><div id="catalogo"></div><section class="contact" id="contacto"><div><div class="eyebrow" style="color:var(--ink)">¿Tienes una pregunta?</div><h2>Hablemos de tu próximo auto.</h2></div><form id="formulario"><input name="nombre" placeholder="Tu nombre" required><input name="email" type="email" placeholder="Correo electrónico" required><button>Solicitar contacto ↗</button><div class="status" id="estado"></div></form></section><section class="contact" id="equipo" style="background:var(--ink);color:var(--cream);margin-top:18px"><div><div class="eyebrow">Acceso interno</div><h2>El equipo mantiene todo en movimiento.</h2></div><div style="display:grid;gap:10px;align-content:center"><a class="cta" href="http://localhost:8084">CRM · Clientes y ventas ↗</a><a class="cta" href="http://localhost:8083">Agenda · Visitas y sucursales ↗</a><a class="cta" href="http://localhost:8082">Stock · Inventario disponible ↗</a><a class="cta" href="http://localhost:8085">Pagos · Operaciones de caja ↗</a></div></section></main>
+  <footer><span>ANDYS MOTORS / SITIO PÚBLICO</span><span>Hecho para moverse mejor.</span></footer>
+  <script>
+    const money = n => new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(n);
+    async function cargar(){const r=await fetch('/api/catalogo');const d=await r.json();const cars=d.vehiculos||d;document.querySelector('#contador').textContent=`${cars.length} vehículos disponibles`;document.querySelector('#catalogo').innerHTML=cars.slice(0,10).map((c,i)=>`<article class="car"><span class="num">0${i+1} / ${c.sucursal}</span><div><span class="tag">${c.condicion}</span><h3>${c.marca} ${c.modelo}</h3><p>${c.anio} · Disponible para visitar</p></div><div class="price">${money(c.precio_clp)}</div></article>`).join('')}
+    cargar().catch(()=>{document.querySelector('#contador').textContent='Inventario temporalmente no disponible';document.querySelector('#catalogo').innerHTML='<p>Estamos actualizando la vitrina. Intenta nuevamente en unos segundos.</p>'});
+    document.querySelector('#formulario').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);const estado=document.querySelector('#estado');estado.textContent='Enviando...';const r=await fetch('/api/contacto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(f))});estado.textContent=r.ok?'Listo. Un ejecutivo te contactará pronto.':'No pudimos registrar tu solicitud.';if(r.ok)e.target.reset()});
+  </script>
+</body></html>

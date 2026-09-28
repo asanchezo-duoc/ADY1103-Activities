@@ -1,0 +1,9 @@
+services:
+  borde:
+    image: haproxy:3.0-alpine
+    container_name: andys-server-borde
+    restart: unless-stopped
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment: { WEB_HOST: host.docker.internal, WEB_PORT: 8081, STOCK_HOST: host.docker.internal, STOCK_PORT: 8082, AGENDA_HOST: host.docker.internal, AGENDA_PORT: 8083, CRM_HOST: host.docker.internal, CRM_PORT: 8084, PAGOS_HOST: host.docker.internal, PAGOS_PORT: 8085 }
+    volumes: ["./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro"]
+    ports: ["80:80", "8404:8404"]

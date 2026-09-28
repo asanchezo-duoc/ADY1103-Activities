@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: andys-server-data
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: andysmotors
+      POSTGRES_USER: andysadmin
+      POSTGRES_PASSWORD: cambiame
+    ports:
+      - "5433:5432"
+    volumes:
+      - andys-data-postgres:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U andysadmin -d andysmotors"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  andys-data-postgres:
+    name: andys-data-postgres

@@ -1,0 +1,8 @@
+services:
+  web:
+    image: andys-motors:local
+    container_name: andys-server-web
+    restart: unless-stopped
+    environment: { SERVICIO: web, PORT: 8081, STOCK_HOST: host.docker.internal, STOCK_PORT: 8082, AGENDA_HOST: host.docker.internal, AGENDA_PORT: 8083, CRM_HOST: host.docker.internal, CRM_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["8081:8081"]

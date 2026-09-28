@@ -10,6 +10,7 @@
 
 const cliente = require("../lib/cliente");
 const logger = require("../lib/logger");
+const path = require("path");
 const { contadorNegocio } = require("../lib/metrics");
 
 const destinos = {
@@ -40,18 +41,10 @@ const visitasAgendadas = contadorNegocio(
 );
 
 function rutas(app) {
+  app.use(require("express").static(path.join(__dirname, "../../public")));
+
   app.get("/", (req, res) => {
-    res.json({
-      empresa: "Andys Motors",
-      mensaje: "Sitio web publico: catalogo, stock, contacto y agendamiento de visitas",
-      endpoints: [
-        "GET  /api/catalogo",
-        "POST /api/contacto",
-        "POST /api/agendar",
-        "GET  /health",
-        "GET  /metrics",
-      ],
-    });
+    res.sendFile(path.join(__dirname, "../../public/index.html"));
   });
 
   // Catalogo: el sitio no tiene los datos, se los pide a la plataforma de stock.

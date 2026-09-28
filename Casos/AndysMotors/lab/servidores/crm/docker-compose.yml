@@ -1,0 +1,8 @@
+services:
+  crm:
+    image: andys-motors:local
+    container_name: andys-server-crm
+    restart: unless-stopped
+    environment: { SERVICIO: crm, PORT: 8084, DB_HOST: host.docker.internal, DB_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["8084:8084"]
