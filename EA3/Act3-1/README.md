@@ -489,6 +489,7 @@ Los cuatro que veras casi seguro:
 | El sitio no responde recien aplicado | Esperar 3-6 minutos: el `user_data` sigue corriendo |
 | Una plataforma sale DOWN en `:8404/stats` | Sus contenedores aun no arrancan. Revisar `docker compose ps` en esa maquina |
 | `VcpuLimitExceeded` al aplicar | La topologia completa pide 7 u 8 instancias: usar `topologia = "compacta"` |
+| `unexpected state 'shutting-down', wanted target 'running'` y la instancia queda `terminated` | El lab la termino al instante por superar el tope de instancias de la cuenta, que **cuenta tambien las detenidas**. Terminar (no detener) las instancias de laboratorios anteriores y repetir el `apply` |
 
 ## 18) Checklist de verificacion
 

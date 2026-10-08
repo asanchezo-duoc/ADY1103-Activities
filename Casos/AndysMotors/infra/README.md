@@ -149,6 +149,20 @@ topologia         = "compacta"   # 2 instancias en vez de 7
 enable_monitoring = false        # una menos
 ```
 
+**El tope cuenta también las instancias detenidas.** Y cuando se supera, el lab no devuelve
+un error: deja que la instancia se cree y la **termina un segundo después** (CloudTrail lo
+registra como `TerminateInstances` de un usuario `sys...`, y la instancia queda en
+`terminated` con `Client.UserInitiatedShutdown`). Terraform lo reporta como *"unexpected
+state 'shutting-down', wanted target 'running'"*. Antes de cada `apply`, revisar cuántas
+instancias hay en la cuenta, detenidas incluidas:
+
+```bash
+aws ec2 describe-instances --query 'Reservations[].Instances[].State.Name' --output text | tr '\t' '\n' | sort | uniq -c
+```
+
+Si hay instancias viejas de otros laboratorios, hay que **terminarlas** (detenerlas no
+libera cupo).
+
 ## 4) Credenciales
 
 En el lab, botón **AWS Details** → **AWS CLI**. Copia el bloque completo a un archivo
@@ -319,7 +333,8 @@ Lo que de verdad quema presupuesto:
 | `UnauthorizedOperation` / `AccessDenied` al crear algo | El lab bloquea esa acción por política | No se puede habilitar desde la cuenta. Ver sección 9 y buscar una alternativa |
 | `You are not authorized to perform: iam:CreateRole` | Algo intentó crear un rol | Este proyecto no lo hace. Si agregaste un módulo del registry, esa es la causa (sección 3.1) |
 | `InvalidKeyPair.NotFound` | No existe el par de llaves `vockey` | Descargarlo desde **AWS Details**, o ajustar `key_name` al nombre real |
-| `VcpuLimitExceeded` | Se alcanzó el límite de instancias del lab | Apagar instancias de laboratorios anteriores, o `enable_monitoring = false` |
+| `VcpuLimitExceeded` | Se alcanzó el límite de instancias del lab | **Terminar** instancias de laboratorios anteriores, o `enable_monitoring = false` |
+| `unexpected state 'shutting-down', wanted target 'running'` y la instancia queda `terminated` con `Client.UserInitiatedShutdown` | El lab terminó la instancia nada más crearse: se superó el tope de instancias de la cuenta, que **cuenta también las detenidas** | Terminar (no detener) las instancias viejas y volver a correr `apply`. Ver sección 3.5 |
 | El sitio no responde tras el `apply` | El `user_data` todavía está corriendo | Esperar 2-4 minutos; revisar `/var/log/cloud-init-output.log` |
 | Los targets salen **DOWN** en Prometheus | Los contenedores de la aplicación aún no arrancan, o el Security Group | Revisar `docker compose ps` en la instancia de aplicación |
 | La creación de RDS falla por cifrado | El lab restringe KMS | Poner `storage_encrypted = false` en `database.tf` y reintentar |
