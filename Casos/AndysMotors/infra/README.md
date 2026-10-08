@@ -56,8 +56,8 @@ referencia.
 | `pagos` | Sistema de pagos y proveedor externo | 8085, 8086 |
 | `data` | Base de datos central | 5432 |
 
-Más un bucket **S3** para los documentos del negocio, que además transporta el código del
-entorno hasta las instancias.
+No se crea ningún bucket S3, aunque el caso lo describe para los documentos del negocio:
+ver la sección 13 y la decisión siguiente.
 
 ### Dos decisiones que conviene entender
 
@@ -67,10 +67,13 @@ que leer la IP de una instancia para construir otra del mismo recurso: una refer
 circular imposible de resolver. Se calculan con `cidrhost()` sobre el rango de la subred,
 desde el `.200` hacia arriba. Como efecto secundario, no cambian nunca.
 
-**El código viaja por S3.** Terraform empaqueta la carpeta `demo/` y la sube al bucket; cada
-instancia la descarga al arrancar con el perfil del laboratorio. Se descartó clonar el
-repositorio (obligaría a que fuera público) e incrustar el código en el `user_data` (AWS lo
-limita a 16 KB).
+**El código se descarga desde GitHub.** El repositorio es público, así que cada instancia
+baja al arrancar el tarball de la rama o commit indicados en `demo_repo_ref` y extrae solo
+la carpeta `Casos/AndysMotors/demo`. No hace falta S3 ni credenciales de AWS dentro de la
+máquina. Se descartó transportarlo por S3 porque el Learner Lab restringe permisos sobre
+buckets y solían quedar imposibles de destruir, e incrustarlo en el `user_data` porque AWS lo
+limita a 16 KB y `demo/` comprimido pesa unos 30 KB. Consecuencia a tener presente: se
+despliega lo que está en el repositorio, no la copia local de cada alumno.
 
 ### Lo que NO incluye
 
@@ -197,7 +200,7 @@ Terraform.
 ## 6) Después del apply
 
 El arranque de cada servidor toma entre **3 y 6 minutos**: instala Docker, descarga el
-entorno desde S3 y, en los servidores de aplicación, construye la imagen. Que la instancia
+entorno desde GitHub y, en los servidores de aplicación, construye la imagen. Que la instancia
 diga `running` no significa que ya esté lista.
 
 ```bash
@@ -235,8 +238,7 @@ Esto es lo que pasa en la práctica, y conviene saberlo antes de que ocurra en c
 | Instancias EC2 | Quedan **detenidas**. Hay que encenderlas desde la consola o con `aws ec2 start-instances`. |
 | IP **pública** | **Cambia**. Las URLs anteriores dejan de servir. |
 | IP **privada** | Se conserva. |
-| Bucket S3 y sus objetos | Se conservan. |
-| State de Terraform | Se conserva (local o en S3). |
+| State de Terraform | Se conserva (es un archivo local, `terraform.tfstate`). |
 | Credenciales | Expiran: hay que copiarlas de nuevo (sección 4). |
 
 La buena noticia es que **la plataforma sigue funcionando sin tocar nada**: HAProxy apunta a
@@ -298,7 +300,7 @@ no hay forma de habilitarlo desde la cuenta del lab.
 ## 10) Presupuesto
 
 Con los valores por defecto (`topologia = "completa"` más el monitoreo de referencia: ocho
-`t3.micro`, ocho discos gp3 de 20 GB y un bucket S3 casi vacío), el gasto es de unos pocos
+`t3.micro` y ocho discos gp3 de 20 GB), el gasto es de unos pocos
 centavos de dólar por hora de laboratorio. Con `topologia = "compacta"` baja a tres
 instancias.
 
@@ -320,15 +322,13 @@ Lo que de verdad quema presupuesto:
 | `VcpuLimitExceeded` | Se alcanzó el límite de instancias del lab | Apagar instancias de laboratorios anteriores, o `enable_monitoring = false` |
 | El sitio no responde tras el `apply` | El `user_data` todavía está corriendo | Esperar 2-4 minutos; revisar `/var/log/cloud-init-output.log` |
 | Los targets salen **DOWN** en Prometheus | Los contenedores de la aplicación aún no arrancan, o el Security Group | Revisar `docker compose ps` en la instancia de aplicación |
-| `terraform destroy` se queda pegado en el bucket S3 | El bucket tiene objetos y versiones | Ya está resuelto con `force_destroy = true`; si falla igual, vaciarlo desde la consola |
 | La creación de RDS falla por cifrado | El lab restringe KMS | Poner `storage_encrypted = false` en `database.tf` y reintentar |
-| Perdiste `terraform.tfstate` | Quedaron recursos huérfanos | Borrarlos a mano desde la consola. Para que no vuelva a pasar, usar `backend.tf.example` |
+| Perdiste `terraform.tfstate` | Quedaron recursos huérfanos | Borrarlos a mano desde la consola. Para que no vuelva a pasar, no borrar la carpeta ni cambiar de máquina a mitad de un laboratorio |
 | `VcpuLimitExceeded` / `InstanceLimitExceeded` | La topología completa pide 7 u 8 instancias | `topologia = "compacta"` y/o `enable_monitoring = false` (ver 3.5) |
 | `InvalidIPAddress.InUse` al crear una instancia | Alguna de las IP privadas fijas (`.200` en adelante) ya está ocupada en la subred | Subir `ip_base` en `locals.tf` a un valor libre, por ejemplo 210 |
 | Un backend sale DOWN en `:8404/stats` | Ese servidor aún está arrancando, o su contenedor falló | Esperar a que termine el `user_data`; si persiste, `sudo docker compose logs` en esa máquina |
 | Todo devuelve 503 desde el balanceador | Los backends todavía no pasan el health check | HAProxy los reincorpora solo, sin reiniciar nada |
-| El `user_data` falla en `aws s3 cp` | El perfil de instancia no tiene acceso al bucket, o la región es otra | Verificar que la instancia use `LabInstanceProfile` y que `aws_region` sea la del bucket |
-| El `apply` sube miles de archivos al bucket | Se corrió `npm install` dentro de `demo/app` | Borrar `demo/app/node_modules`. El código ya lo excluye, pero conviene no generarlo |
+| El `user_data` falla al descargar el entorno (`curl` o `tar`) | La instancia no llega a GitHub, o `demo_repo_ref` no existe en el repositorio | Revisar `/var/log/cloud-init-output.log`; comprobar que la rama o commit de `demo_repo_ref` exista |
 
 ## 12) Destruir el laboratorio
 
@@ -338,9 +338,8 @@ Lo que de verdad quema presupuesto:
 ./scripts/tf.sh destroy
 ```
 
-Y después confirma en la consola de AWS que no quedó nada: EC2, RDS, volúmenes EBS
-sueltos y buckets S3. Un volumen EBS huérfano sigue costando aunque su instancia ya no
-exista.
+Y después confirma en la consola de AWS que no quedó nada: EC2, RDS y volúmenes EBS
+sueltos. Un volumen EBS huérfano sigue costando aunque su instancia ya no exista.
 
 ## 13) Qué NO hace este proyecto
 
@@ -352,7 +351,8 @@ Decisiones tomadas a propósito, con su motivo:
 | **VPC propia** | Más permisos involucrados, más lento, más que destruir, y lleva a la tentación del NAT Gateway | La VPC por defecto de la cuenta |
 | **ALB / Auto Scaling** | Costo, y el balanceador de AWS no expone métricas Prometheus | **HAProxy**, que trae el exporter integrado y es un objeto de estudio en sí mismo |
 | **Roles de IAM propios** | El lab lo prohíbe (sección 3.1) | `LabInstanceProfile` |
-| **Bloqueo del state con DynamoDB** | Cada alumno trabaja en su propia cuenta | State local, o S3 si se usa `backend.tf.example` |
+| **S3** | El Learner Lab restringe permisos sobre buckets (versionado, borrado de versiones) y los buckets quedaban imposibles de destruir, dejando a los alumnos con recursos huérfanos. Tampoco aporta nada pedagógico a una actividad de monitoreo | El código del entorno se descarga desde GitHub en el `user_data` |
+| **Backend remoto del state** | Cada alumno trabaja en su propia cuenta, y el reset del lab borraría también el bucket que guardara el state | State local (`terraform.tfstate`), que no se versiona |
 | **Secrets Manager** | Tiene costo y no siempre está habilitado | `terraform.tfvars` fuera de git, o variables `TF_VAR_*` |
 
 Si tu lab sí habilita Route 53 o ALB, agregarlos es un buen ejercicio de extensión.

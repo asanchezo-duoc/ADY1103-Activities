@@ -15,7 +15,9 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # Perfil de instancia preexistente del lab. Permite que las EC2 hablen con otros
-# servicios de AWS (S3, CloudWatch) sin crear un rol propio.
+# servicios de AWS (por ejemplo CloudWatch) sin crear un rol propio. El entorno
+# no lo necesita para arrancar: el codigo se descarga desde GitHub, sin
+# credenciales de AWS dentro de la maquina.
 data "aws_iam_instance_profile" "lab" {
   name = "LabInstanceProfile"
 }

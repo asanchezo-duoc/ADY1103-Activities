@@ -89,6 +89,37 @@ variable "admin_token" {
 }
 
 # ---------------------------------------------------------------------------
+# Origen del codigo del entorno
+#
+# Cada servidor descarga la carpeta demo/ directamente desde GitHub al arrancar.
+# El repositorio es publico, asi que no hace falta S3 ni credenciales de AWS
+# dentro de la maquina. Lo que se despliega es lo que esta en el repositorio
+# (en la rama o commit indicados), no la copia local del alumno.
+# ---------------------------------------------------------------------------
+
+variable "demo_repo_url" {
+  description = "Repositorio GitHub (sin .git) del que las instancias descargan el entorno."
+  type        = string
+  default     = "https://github.com/asanchezo-duoc/ADY1103-Activities"
+}
+
+variable "demo_repo_ref" {
+  description = <<-EOT
+    Rama, tag o commit a descargar. Fijar un commit garantiza que todos los
+    servidores levanten exactamente el mismo codigo aunque el repositorio
+    cambie durante la clase.
+  EOT
+  type        = string
+  default     = "main"
+}
+
+variable "demo_repo_subdir" {
+  description = "Ruta de la carpeta del entorno dentro del repositorio."
+  type        = string
+  default     = "Casos/AndysMotors/demo"
+}
+
+# ---------------------------------------------------------------------------
 # Computo
 # ---------------------------------------------------------------------------
 

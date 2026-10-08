@@ -101,8 +101,8 @@ Prometheus ni Grafana**: expone la telemetría, y el stack de monitoreo se const
 ## Infraestructura del caso
 
 La carpeta [`infra/`](./infra) contiene el código **Terraform** que levanta esta misma
-arquitectura sobre una cuenta de **AWS Academy Learner Lab**: las instancias EC2, el bucket
-S3, los Security Groups y —opcionalmente— la base de datos RDS. Las plataformas del caso
+arquitectura sobre una cuenta de **AWS Academy Learner Lab**: las instancias EC2, los
+Security Groups y —opcionalmente— la base de datos RDS. Las plataformas del caso
 (sitio web, CRM y pagos) corren como contenedores Docker sobre la instancia de aplicación, y
 publican métricas a través de tres exporters.
 

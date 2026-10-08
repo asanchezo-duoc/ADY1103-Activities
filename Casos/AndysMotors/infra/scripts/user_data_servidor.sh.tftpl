@@ -13,9 +13,9 @@
 #   web     sitio web publico
 #   borde   balanceador HAProxy
 #
-# El codigo del entorno viaja por S3: Terraform empaqueta la carpeta demo/, la
-# sube al bucket, y esta maquina la descarga usando el perfil de instancia del
-# laboratorio. Asi el repositorio no necesita ser publico.
+# El codigo del entorno se descarga directamente desde GitHub: el repositorio
+# es publico, asi que esta maquina baja el tarball de la rama o commit indicados
+# y extrae solo la carpeta demo/. No hace falta S3 ni credenciales de AWS.
 #
 # Los logs de este script quedan en /var/log/cloud-init-output.log
 # ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ COMPOSE_VERSION=v2.29.7
 
 # --- 1. Dependencias --------------------------------------------------------
 dnf update -y
-dnf install -y docker unzip
+dnf install -y docker tar gzip
 systemctl enable --now docker
 usermod -aG docker ec2-user
 
@@ -37,16 +37,21 @@ curl -fsSL "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION
   -o "$CLI_PLUGINS/docker-compose"
 chmod +x "$CLI_PLUGINS/docker-compose"
 
-# Amazon Linux 2023 suele traer la CLI de AWS, pero no en todas las AMI.
-if ! command -v aws >/dev/null 2>&1; then
-  dnf install -y awscli-2 || dnf install -y aws-cli
-fi
-
 # --- 2. Descargar el entorno ------------------------------------------------
+# GitHub entrega el repositorio completo como tar.gz; se extrae unicamente la
+# carpeta del entorno. El primer componente de la ruta dentro del tarball es
+# "<repo>-<ref>" y cambia segun la rama o commit, por eso se usa un comodin.
+REPO_URL="${repo_url}"
+REPO_REF="${repo_ref}"
+REPO_SUBDIR="${repo_subdir}"
+PROFUNDIDAD=$(( $(echo "$REPO_SUBDIR" | tr -cd '/' | wc -c) + 2 ))
+
 mkdir -p "$DESTINO"
-aws s3 cp "s3://${bucket}/${objeto}" /tmp/demo.zip --region "${region}"
-unzip -o -q /tmp/demo.zip -d "$DESTINO"
+curl -fsSL --retry 5 --retry-delay 10 "$REPO_URL/archive/$REPO_REF.tar.gz" -o /tmp/repo.tar.gz
+tar xzf /tmp/repo.tar.gz -C "$DESTINO" --strip-components="$PROFUNDIDAD" --wildcards "*/$REPO_SUBDIR/*"
+rm -f /tmp/repo.tar.gz
 cd "$DESTINO"
+test -f docker-compose.yml || { echo "ERROR: no se encontro $REPO_SUBDIR en $REPO_URL ($REPO_REF)"; exit 1; }
 
 # --- 3. Configuracion -------------------------------------------------------
 # El .env se genera aqui con las direcciones que Terraform ya conoce, porque las

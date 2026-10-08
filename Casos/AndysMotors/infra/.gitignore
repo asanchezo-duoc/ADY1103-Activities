@@ -19,6 +19,3 @@ terraform.tfvars
 
 # Planes guardados
 *.tfplan
-
-# Backend real (usar backend.tf.example como plantilla)
-backend.tf

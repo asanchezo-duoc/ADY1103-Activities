@@ -37,9 +37,9 @@ resource "aws_instance" "servidor" {
   user_data = templatefile("${path.module}/scripts/user_data_servidor.sh.tftpl", {
     project_name = var.project_name
     perfiles     = each.value.perfiles
-    region       = var.aws_region
-    bucket       = aws_s3_bucket.documentos.bucket
-    objeto       = aws_s3_object.demo.key
+    repo_url     = var.demo_repo_url
+    repo_ref     = var.demo_repo_ref
+    repo_subdir  = var.demo_repo_subdir
 
     db_host     = local.db_host
     db_name     = var.db_name
@@ -81,10 +81,6 @@ resource "aws_instance" "servidor" {
     Rol      = each.value.rol
     Perfiles = each.value.perfiles
   }
-
-  # El contenido del entorno debe estar en el bucket antes de que la maquina
-  # intente descargarlo.
-  depends_on = [aws_s3_object.demo]
 }
 
 # ---------------------------------------------------------------------------

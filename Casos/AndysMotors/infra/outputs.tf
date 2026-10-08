@@ -74,11 +74,6 @@ output "prometheus" {
   value       = var.enable_monitoring ? "http://${aws_instance.monitoreo[0].public_ip}:9090/targets" : "monitoreo de referencia deshabilitado"
 }
 
-output "bucket_documentos" {
-  description = "Bucket S3 con los documentos del negocio y el paquete del entorno."
-  value       = aws_s3_bucket.documentos.bucket
-}
-
 output "rds_endpoint" {
   description = "Endpoint de RDS cuando enable_rds = true."
   value       = var.enable_rds ? aws_db_instance.main[0].address : "RDS deshabilitado: la base de datos corre como contenedor en ServerData"
@@ -89,7 +84,7 @@ output "siguientes_pasos" {
   value       = <<-EOT
 
     1. El arranque de cada servidor toma entre 3 y 6 minutos: instala Docker,
-       descarga el entorno desde S3 y construye la imagen de las aplicaciones.
+       descarga el entorno desde GitHub y construye la imagen de las aplicaciones.
        Que la instancia diga "running" no significa que ya este lista.
 
     2. Revisar el avance en cualquier servidor:

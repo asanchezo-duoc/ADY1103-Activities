@@ -2,7 +2,7 @@
 
 Guia paso a paso para levantar, con **infraestructura como codigo**, la plataforma completa
 de la empresa del caso sobre una cuenta de **AWS Academy Learner Lab**: instancias EC2,
-almacenamiento S3, Security Groups y los servicios de la empresa corriendo en contenedores.
+Security Groups y los servicios de la empresa corriendo en contenedores.
 
 Al terminar tendras un entorno AWS real, reproducible y desechable, que es la base sobre la
 que se trabajan las actividades de monitoreo en la nube de esta unidad.
@@ -84,9 +84,12 @@ telemetria, recolectarla es otro trabajo.
 |---|---|---|
 | 6 servidores de plataforma | EC2 `t3.micro` | Sitio web, stock, agenda, CRM, pagos y base de datos |
 | Balanceador | EC2 `t3.micro` | HAProxy: entrada publica y metricas del borde |
-| Bucket de documentos | S3 | Archivos del negocio, y transporte del codigo a las instancias |
 | Reglas de acceso | Security Groups | Quien puede hablar con quien |
 | Base de datos (opcional) | RDS PostgreSQL | Paso 10 |
+
+> El caso describe ademas un bucket S3 para los documentos del negocio. **No se crea aqui**:
+> el Learner Lab restringe permisos sobre buckets y solian quedar imposibles de destruir.
+> El codigo del entorno llega a cada instancia descargandolo directamente desde GitHub.
 
 > **Si la cuota de instancias de tu laboratorio no alcanza**, pon `topologia = "compacta"` en
 > `terraform.tfvars`: son 2 servidores en vez de 7, con el mismo entorno desplegado. La
@@ -147,7 +150,7 @@ consumiendo tu presupuesto. Por eso el state no se borra ni se sube a git.
 | | Terraform | Docker |
 |---|---|---|
 | Se encarga de | La infraestructura: maquinas, red, almacenamiento | Los servicios que corren dentro de las maquinas |
-| En esta actividad | EC2, S3, Security Groups | Las seis plataformas del caso, PostgreSQL y HAProxy |
+| En esta actividad | EC2, Security Groups | Las seis plataformas del caso, PostgreSQL y HAProxy |
 
 El puente entre ambos es el **`user_data`**: un script que EC2 ejecuta la primera vez que la
 instancia arranca, y que instala Docker y levanta los contenedores. Terraform lo genera a
@@ -278,7 +281,7 @@ cd /opt/andys && sudo docker compose ps         # contenedores de esa plataforma
 ```
 
 > El arranque toma entre 3 y 6 minutos: cada servidor instala Docker, descarga el entorno
-> desde S3 y construye la imagen de las aplicaciones.
+> desde GitHub y construye la imagen de las aplicaciones.
 
 ## 10) Paso 6 - Reconocer la telemetria disponible
 
@@ -374,9 +377,9 @@ respuestas estan en los comentarios del propio codigo.
 | 5 | `compute.tf` | Que hace `user_data_replace_on_change` y por que esta en `true`? |
 | 6 | `locals.tf` | Por que las IP privadas se calculan con `cidrhost()` en vez de dejar que AWS las asigne? |
 | 6b | `locals.tf` | Que cambia entre `topologia = "completa"` y `"compacta"`, y que NO cambia? |
-| 6c | `storage.tf` | Por que el codigo del entorno viaja por S3, y no clonando el repositorio ni dentro del `user_data`? |
-| 7 | `storage.tf` | Que hace `force_destroy` y por que tiene sentido en un laboratorio? |
-| 8 | `storage.tf` | Que problema evita el bloque `public_access_block`? |
+| 6c | `scripts/user_data_servidor.sh.tftpl` | Como llega el codigo del entorno a cada instancia, y por que no se incrusta directamente dentro del `user_data`? |
+| 7 | `variables.tf` | Que pasa si el repositorio cambia mientras el laboratorio esta levantado? Para que sirve `demo_repo_ref`? |
+| 8 | `README.md` (seccion 13) | El caso describe un bucket S3, pero el proyecto no lo crea. Que restriccion del Learner Lab motiva esa decision? |
 | 9 | `variables.tf` | Por que `db_password` no admite los caracteres `/`, `@` ni `"`? |
 | 10 | `database.tf` | Por que `enable_rds` viene apagado por defecto? Da las tres razones. |
 | 11 | `borde/haproxy.cfg` (en `demo/`) | Que hace `init-addr last,libc,none` y que problema evita? |
@@ -453,7 +456,7 @@ base de datos en un servicio administrado?
 ```
 
 Escribe `yes` para confirmar. Despues entra a la consola de AWS y comprueba que no quedo
-nada: instancias EC2, RDS, **volumenes EBS sueltos** y buckets S3. Un volumen huerfano sigue
+nada: instancias EC2, RDS y **volumenes EBS sueltos**. Un volumen huerfano sigue
 costando aunque su instancia ya no exista.
 
 Esta es la ventaja concreta de la infraestructura como codigo: destruir todo cuesta un
