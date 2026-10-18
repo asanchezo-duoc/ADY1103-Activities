@@ -1,28 +1,33 @@
-# EA3 - Act 3.3: Tu primer dashboard en CloudWatch, paso a paso
+# EA3 - Act 3.3: Del log al dashboard: un ataque SSH y la CPU en una sola pantalla
 
-Guia paso a paso para construir **a mano**, widget por widget, un panel de CloudWatch con la
-CPU, la RAM, el disco y la red del servidor Red Hat de la actividad anterior.
+Guia paso a paso para llevar el log de autenticacion de un servidor Red Hat hasta un
+**dashboard de CloudWatch** que muestre, al mismo tiempo, un ataque SSH y el consumo de CPU
+de la maquina.
 
 > **Video de la actividad**: _(enlace pendiente)_
 
-> **Depende de [EA3/Act3-2](../Act3-2)**: se asume que tienes la instancia Red Hat corriendo,
-> con el CloudWatch Agent enviando metricas al namespace `CWAgent`.
+> **Depende de [EA3/Act3-1](../Act3-1)**: se asume que tienes la instancia Red Hat corriendo,
+> con el CloudWatch Agent instalado y enviando metricas.
 
 ## Indice
 
 1. [Objetivo de la actividad](#1-objetivo-de-la-actividad)
 2. [Que vas a construir](#2-que-vas-a-construir)
-3. [Antes de tocar nada: anatomia de un widget](#3-antes-de-tocar-nada-anatomia-de-un-widget)
-4. [Paso 1 - Crear el panel](#4-paso-1---crear-el-panel)
-5. [Paso 2 - Widget Numero: CPU](#5-paso-2---widget-numero-cpu)
-6. [Paso 3 - Widget Numero: RAM](#6-paso-3---widget-numero-ram)
-7. [Paso 4 - Widget Medidor: disco](#7-paso-4---widget-medidor-disco)
-8. [Paso 5 - Widget Linea: CPU y RAM en el tiempo](#8-paso-5---widget-linea-cpu-y-ram-en-el-tiempo)
-9. [Paso 6 - Widget Linea: red](#9-paso-6---widget-linea-red)
-10. [Paso 7 - Ordenar y guardar](#10-paso-7---ordenar-y-guardar)
-11. [Evidencias esperadas](#11-evidencias-esperadas)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Checklist de verificacion](#13-checklist-de-verificacion)
+3. [Paso 1 - Por que no entra Instance Connect](#3-paso-1---por-que-no-entra-instance-connect)
+4. [Paso 2 - Instalar EC2 Instance Connect en Red Hat](#4-paso-2---instalar-ec2-instance-connect-en-red-hat)
+5. [Paso 3 - Sumar logs al agente](#5-paso-3---sumar-logs-al-agente)
+6. [Paso 4 - Verificar que los logs llegan](#6-paso-4---verificar-que-los-logs-llegan)
+7. [Paso 5 - Generar el ataque](#7-paso-5---generar-el-ataque)
+8. [Paso 6 - Logs Insights, de menos a mas](#8-paso-6---logs-insights-de-menos-a-mas)
+9. [Paso 7 - Retencion](#9-paso-7---retencion)
+10. [Paso 8 - Crear la alarma](#10-paso-8---crear-la-alarma)
+11. [Paso 9 - Construir el dashboard](#11-paso-9---construir-el-dashboard)
+12. [Paso 10 - Correlacion: ataque y CPU](#12-paso-10---correlacion-ataque-y-cpu)
+13. [Paso 11 - El dashboard como codigo](#13-paso-11---el-dashboard-como-codigo)
+14. [Paso 12 - Limpieza](#14-paso-12---limpieza)
+15. [Evidencias esperadas](#15-evidencias-esperadas)
+16. [Troubleshooting](#16-troubleshooting)
+17. [Checklist de verificacion](#17-checklist-de-verificacion)
 
 ---
 
@@ -30,131 +35,387 @@ CPU, la RAM, el disco y la red del servidor Red Hat de la actividad anterior.
 
 Que seas capaz de:
 
-- Crear un panel (dashboard) personalizado en CloudWatch.
-- Elegir el **tipo de widget** adecuado para cada pregunta: numero, medidor o linea.
-- Encontrar una metrica navegando por **namespace** y **dimensiones**.
-- Combinar en un mismo grafico metricas nativas (`AWS/EC2`) y del agente (`CWAgent`).
-- Ajustar titulo, periodo y rango de un widget.
+- Habilitar **EC2 Instance Connect** en una distribucion que no lo trae instalado.
+- Enviar un archivo de log a **CloudWatch Logs** con el CloudWatch Agent.
+- Consultar logs con **Logs Insights**: `fields`, `filter`, `stats`, `bin()` y `parse`.
+- Definir una **politica de retencion** con criterio de costo (FinOps).
+- Crear una **alarma** y mostrarla en un dashboard.
+- **Correlacionar** en un mismo panel metricas, logs, alarmas y un runbook.
+- Leer el JSON de un dashboard y entender por que se trata como codigo.
 
 ## 2) Que vas a construir
 
-Un panel llamado `Panel-Alumnos-RHEL` con cinco widgets:
+```
+EC2 Red Hat  -->  CloudWatch Agent  -->  CloudWatch Logs  -->  Logs Insights  -->  Dashboard
+/var/log/secure     lee y envia          grupo /rhel/secure     consultas          ataque SSH + CPU
+```
 
-| # | Widget | Tipo | Metrica | Namespace |
-|---|---|---|---|---|
-| 1 | CPU (%) | Numero | `CPUUtilization` | `AWS/EC2` |
-| 2 | RAM usada (%) | Numero | `mem_used_percent` | `CWAgent` |
-| 3 | Disco / usado (%) | Medidor 0-100 | `disk_used_percent` | `CWAgent` |
-| 4 | CPU y RAM (%) - cada 1 minuto | Linea | `CPUUtilization` + `mem_used_percent` | ambos |
-| 5 | Red - entrada y salida (bytes) | Linea | `NetworkIn` + `NetworkOut` | `AWS/EC2` |
+El dashboard final, `Seguridad-SSH-RHEL`, tiene cuatro widgets:
 
-## 3) Antes de tocar nada: anatomia de un widget
-
-| Tipo | Responde a | Ejemplo |
+| Posicion | Widget | Origen |
 |---|---|---|
-| **Numero** | Como esta **ahora**? | CPU actual: 0,5 % |
-| **Medidor** | Que tan **cerca del limite** esta? | Disco: 23 % de 100 % |
-| **Linea** | Como **cambio** en el tiempo? | La CPU subio a las 22:40 |
+| Arriba a la izquierda | CPU de la instancia (%) | Metrica `AWS/EC2` |
+| Arriba a la derecha | Top 10 IPs atacantes | Consulta de Logs Insights |
+| Abajo a la izquierda | Estado de la alarma de CPU | Alarma `CPU-alta-RHEL` |
+| Abajo al centro | Runbook | Texto Markdown |
 
-Cada metrica se encuentra siempre con la misma ruta:
+> La CPU va **arriba a la izquierda** por el patron de lectura en F: es lo primero que mira
+> quien abre el panel.
+
+## 3) Paso 1 - Por que no entra Instance Connect
+
+**EC2** > tu instancia > **Conectar** > **Conexion de la instancia EC2** > usuario `ec2-user`
+> **Conectar**.
+
+Resultado: **No se pudo conectar a la instancia**.
+
+EC2 Instance Connect funciona asi: la consola genera una **llave SSH temporal** (valida 60
+segundos), se la entrega al servicio de AWS y el `sshd` de la instancia la consulta en el
+momento del login. Para eso, la instancia necesita un paquete que le ensenie a `sshd` a hacer
+esa consulta. **Amazon Linux y Ubuntu lo traen instalado. Red Hat no.**
+
+## 4) Paso 2 - Instalar EC2 Instance Connect en Red Hat
+
+Como Instance Connect aun no funciona, entramos **una unica vez** con la llave desde la
+terminal del Learner Lab:
+
+```bash
+ssh -i ~/.ssh/labsuser.pem -o StrictHostKeyChecking=no ec2-user@<IP_PUBLICA>
+```
+
+Instala el paquete oficial de AWS y su modulo de SELinux:
+
+```bash
+sudo dnf install -y \
+  https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect.rhel8.rpm \
+  https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect-selinux.noarch.rpm
+```
+
+En Red Hat el paquete instala el script `/opt/aws/bin/eic_run_authorized_keys`, pero **no lo
+activa** en `sshd`. Compruebalo:
+
+```bash
+sudo sshd -T | grep -i authorizedkeyscommand
+# authorizedkeyscommand none
+```
+
+Activalo con un archivo propio en `sshd_config.d`:
+
+```bash
+sudo tee /etc/ssh/sshd_config.d/40-ec2-instance-connect.conf <<'EOF'
+AuthorizedKeysCommand /opt/aws/bin/eic_run_authorized_keys %u %f
+AuthorizedKeysCommandUser ec2-instance-connect
+EOF
+
+sudo sshd -t && sudo systemctl restart sshd
+sudo sshd -T | grep -i authorizedkeyscommand
+# authorizedkeyscommand /opt/aws/bin/eic_run_authorized_keys %u %f
+# authorizedkeyscommanduser ec2-instance-connect
+```
+
+> `sshd -t` valida la configuracion **antes** de reiniciar. Si tiene un error y reinicias
+> igual, puedes quedarte sin acceso SSH.
+
+Sal con `exit` y vuelve a probar **Conectar** desde la consola: ahora se abre la terminal en
+el navegador. **Desde aqui, todo se hace en esa terminal.**
+
+## 5) Paso 3 - Sumar logs al agente
+
+Revisa la configuracion actual: solo envia metricas.
+
+```bash
+cat /opt/aws/amazon-cloudwatch-agent/etc/config.json
+```
+
+Agregale la seccion `logs`:
+
+```bash
+sudo tee /opt/aws/amazon-cloudwatch-agent/etc/config.json > /dev/null <<'EOF'
+{
+  "agent": { "metrics_collection_interval": 60, "run_as_user": "root" },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": { "InstanceId": "${aws:InstanceId}" },
+    "metrics_collected": {
+      "cpu":  { "measurement": ["cpu_usage_user", "cpu_usage_system", "cpu_usage_idle"], "totalcpu": true },
+      "mem":  { "measurement": ["mem_used_percent"] },
+      "disk": { "measurement": ["used_percent"], "resources": ["/"] },
+      "swap": { "measurement": ["swap_used_percent"] }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          { "file_path": "/var/log/secure", "log_group_name": "/rhel/secure", "log_stream_name": "{instance_id}" }
+        ]
+      }
+    }
+  }
+}
+EOF
+```
+
+| Clave | Que hace |
+|---|---|
+| `file_path` | El archivo que se lee. En Red Hat, los eventos de SSH y `sudo` van a `/var/log/secure` |
+| `log_group_name` | El **grupo** de CloudWatch Logs. Si no existe, el agente lo crea |
+| `log_stream_name: {instance_id}` | Un **stream** por instancia, con su ID como nombre |
+
+Recarga el agente:
+
+```bash
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
+```
+
+## 6) Paso 4 - Verificar que los logs llegan
+
+```bash
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
+```
+
+Debe decir `"status": "running"`.
+
+En la consola: **CloudWatch** > **Registros** > **Administracion de registros** > `/rhel/secure`
+> el stream con el ID de tu instancia.
+
+Veras tus propios logins. Busca las lineas de `eic-curl-authorized-keys` seguidas de
+`Accepted publickey`: es Instance Connect validando la llave temporal.
+
+Para verlo en tiempo real: boton **Empezar a seguir** (**Live Tail**). Dejalo abierto para el
+siguiente paso.
+
+## 7) Paso 5 - Generar el ataque
+
+Desde **otra maquina** (la terminal del Learner Lab), intenta entrar 40 veces con usuarios
+inexistentes:
+
+```bash
+for i in {1..40}; do
+  ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=no admin$i@<IP_PUBLICA> 2>/dev/null
+done
+```
+
+En Live Tail aparecen lineas como esta:
 
 ```
-Namespace  >  Dimensiones  >  Nombre de la metrica
-AWS/EC2    >  Metricas por instancia (InstanceId)  >  CPUUtilization
-CWAgent    >  InstanceId  >  mem_used_percent
-CWAgent    >  InstanceId, device, fstype, path  >  disk_used_percent
+sshd-session[3125]: Invalid user admin12 from 32.186.26.168 port 57438
 ```
 
-## 4) Paso 1 - Crear el panel
+> **Importante**: en las instancias de AWS la autenticacion por contrasenia viene
+> **desactivada**. Por eso no veras `Failed password`, sino **`Invalid user`**. Las consultas
+> filtran por ese texto.
 
-**CloudWatch** > **Paneles** > **Crear un panel** > nombre `Panel-Alumnos-RHEL` > **Crear un
-panel**.
+> **Dato**: es posible que no lleguen los 40 intentos. Las versiones recientes de OpenSSH
+> **penalizan** a una IP que se conecta muchas veces sin autenticarse, y la desconectan antes
+> de registrar el usuario. Veras lineas `drop connection ... penalty: connections without
+> attempting authentication`. Es una defensa nativa, no un error.
 
-Se abre la ventana **Agregar un widget**.
+## 8) Paso 6 - Logs Insights, de menos a mas
 
-## 5) Paso 2 - Widget Numero: CPU
+**CloudWatch** > **Registros** > **Logs Insights**. En **Alcance de la consulta** elige el grupo
+`/rhel/secure` y el rango **30m**. Ejecuta las consultas en orden y **mira el resultado de cada
+una antes de pasar a la siguiente**.
 
-1. Tipo de datos **Metricas**, tipo de widget **Numero** > **Siguiente**.
-2. **EC2** > **Metricas por instancia**.
-3. En el buscador escribe `CPUUtilization` y presiona Enter.
-4. Marca la fila de tu instancia.
-5. Haz clic en el **lapiz** junto al titulo y cambialo a `CPU (%)` > **Aplicar**.
-6. **Crear widget**.
+> En la consola nueva, la primera linea del editor es `SOURCE ... |`, generada a partir del
+> grupo elegido. **No la borres**: escribe tu consulta a partir de la segunda linea.
 
-## 6) Paso 3 - Widget Numero: RAM
+**Consulta 1 - Los ultimos 20 eventos**
 
-1. Boton **+** (arriba a la derecha) > **Metricas** > **Numero** > **Siguiente**.
-2. **CWAgent** > **InstanceId** > marca `mem_used_percent`.
-3. Titulo: `RAM usada (%)` > **Crear widget**.
+```
+fields @timestamp, @message
+| sort @timestamp desc
+| limit 20
+```
 
-> Fijate en el namespace: la RAM **solo existe** en `CWAgent`. Sin el agente de la actividad
-> anterior, este widget no se podria construir.
+**Consulta 2 - Solo los intentos fallidos**
 
-## 7) Paso 4 - Widget Medidor: disco
+```
+fields @timestamp, @message
+| filter @message like /Invalid user/
+| sort @timestamp desc
+```
 
-1. **+** > **Metricas** > **Medidor** > **Siguiente**.
-2. **CWAgent** > **InstanceId, device, fstype, path** > marca `disk_used_percent`.
-3. Titulo: `Disco / usado (%)`.
-4. Pestania **Opciones** > **Rango del medidor**: Min `0`, Max `100`.
-5. **Crear widget**.
+**Consulta 3 - Intentos por bloques de 5 minutos**
 
-> Un medidor **no se puede crear** sin rango: la consola muestra *You have to set the gauge
-> range*. El rango le da sentido al valor: 23 % significa poco si no sabes que el maximo es 100.
+```
+filter @message like /Invalid user/
+| stats count(*) as intentos by bin(5m)
+```
 
-## 8) Paso 5 - Widget Linea: CPU y RAM en el tiempo
+Con `stats` aparece la vista **Visualizacion**: elige **Barra** para ver el histograma del
+ataque.
 
-1. **+** > **Metricas** > **Linea** > **Siguiente**.
-2. **EC2** > **Metricas por instancia** > `CPUUtilization` de tu instancia.
-3. Quita el filtro, vuelve a **Todo** > **CWAgent** > **InstanceId** > `mem_used_percent`.
-4. Pestania **Metricas diagramadas**: cambia el **Periodo** a **1 minuto**.
-5. Titulo: `CPU y RAM (%) - cada 1 minuto` > **Crear widget**.
+**Consulta 4 - Top 10 de IPs atacantes**
 
-> Aqui conviven en un mismo grafico una metrica medida **desde afuera** (`AWS/EC2`) y otra
-> medida **desde adentro** del sistema operativo (`CWAgent`).
+```
+filter @message like /Invalid user/
+| parse @message "Invalid user * from * port" as usuario, ip
+| stats count(*) as intentos by ip
+| sort intentos desc
+| limit 10
+```
 
-## 9) Paso 6 - Widget Linea: red
+`parse` usa `*` como comodin: el primero se guarda en `usuario` y el segundo en `ip`.
 
-1. **+** > **Metricas** > **Linea** > **Siguiente**.
-2. **EC2** > **Metricas por instancia**, busca `Network`.
-3. Marca `NetworkIn` y `NetworkOut`.
-4. **Metricas diagramadas** > Periodo **1 minuto**.
-5. Titulo: `Red - entrada y salida (bytes)` > **Crear widget**.
+Guarda esta ultima consulta: **Consultas guardadas** > **Guardar** > nombre
+`Top10-IPs-SSH-Invalid-user`. Es el puente hacia el dashboard.
 
-## 10) Paso 7 - Ordenar y guardar
+## 9) Paso 7 - Retencion
 
-- Los widgets se **mueven** arrastrandolos desde su encabezado.
-- Se **redimensionan** desde la esquina inferior derecha.
-- Elige el rango **1h** arriba.
-- Haz clic en **Guardar**.
+Por defecto, un grupo de logs guarda todo **para siempre** (*No vence nunca*), y en una cuenta
+real eso se paga todos los meses.
 
-> **Un panel que no se guarda se pierde.** La consola lo recuerda con un aviso azul cada vez
-> que agregas un widget.
+`/rhel/secure` > **Acciones** > **Editar configuracion de retencion** > **2 semanas (14 dias)**
+> **Guardar**.
 
-## 11) Evidencias esperadas
+La regla de FinOps:
 
-1. Captura del panel completo con los cinco widgets.
-2. Captura del medidor de disco con su rango 0-100.
-3. Captura del grafico de CPU y RAM con periodo de 1 minuto.
-4. Explica en dos lineas por que elegiste **Numero**, **Medidor** o **Linea** para cada widget.
+| Tipo de log | Retencion tipica | Por que |
+|---|---|---|
+| Debug / aplicacion | Dias | Sirve para diagnosticar ahora; despues es ruido caro |
+| Autenticacion / auditoria | Anios | Normativas y auditorias lo exigen |
 
-## 12) Troubleshooting
+Para guardar anios **sin pagar CloudWatch**: **Acciones** > **Exportar datos a Amazon S3**
+(almacenamiento frio). Despues se consultan con **Amazon Athena**. En esta actividad solo
+ubicalo; **no lo ejecutes**.
+
+## 10) Paso 8 - Crear la alarma
+
+**CloudWatch** > **Alarmas** > **Crear alarma** > **Seleccione una metrica** > **EC2** >
+**Metricas por instancia** > `CPUUtilization` de tu instancia.
+
+| Campo | Valor |
+|---|---|
+| Estadistica | Media |
+| Periodo | **1 minuto** |
+| Condicion | **Mayor** que **70** |
+| Puntos de datos para la alarma | **2 de 2** |
+
+*2 de 2* significa: la CPU debe superar 70 % durante **dos minutos seguidos**. Asi un pico de
+un segundo no despierta a nadie.
+
+En **Notificacion**, quita la accion (**Eliminar**): no tenemos un tema SNS. Confirma
+**Proceder sin acciones**. Nombre: `CPU-alta-RHEL` > **Crear alarma**.
+
+## 11) Paso 9 - Construir el dashboard
+
+**CloudWatch** > **Paneles** > **Crear un panel** > `Seguridad-SSH-RHEL`.
+
+**Widget 1 - CPU.** **Metricas** > **Linea** > **EC2** > **Metricas por instancia** >
+`CPUUtilization`. Periodo **1 minuto**. Titulo `CPU de la instancia (%)`.
+
+**Widget 2 - Tabla de logs.** **+** > tipo de datos **Registros** > **Tabla de registros**. Se
+abre Logs Insights: **Consultas guardadas** > `Top10-IPs-SSH-Invalid-user` > **Ejecutar** >
+**Crear**. Titulo `Top 10 IPs atacantes (SSH Invalid user)`. Arrastrala a la derecha de la CPU
+y achicala desde su esquina para que quepan lado a lado.
+
+**Widget 3 - Semaforo.** **+** > **Alarmas** > **Estado de la alarma** > marca `CPU-alta-RHEL`
+> titulo `Estado: CPU alta` > **Aniadir al panel**.
+
+**Widget 4 - Runbook.** **+** > **Otros tipos de contenido** > **Texto** > en el Markdown:
+
+```markdown
+## Runbook: ataque SSH
+
+Si una IP supera **50 intentos**:
+
+1. Bloquear la IP en el Security Group o NACL
+2. Avisar al equipo de seguridad (canal #seguridad)
+3. Revisar el Top 10 de IPs y el log /rhel/secure
+
+Si la alarma **CPU-alta-RHEL** esta en rojo: revisar procesos con top y correlacionar con el ataque.
+```
+
+Por ultimo: actualizacion automatica cada **10 segundos**, rango **1h** y **Guardar**.
+
+## 12) Paso 10 - Correlacion: ataque y CPU
+
+Este es el momento clave. Haz dos cosas **al mismo tiempo**:
+
+En la terminal de Instance Connect, carga la CPU durante 5 minutos:
+
+```bash
+for i in 1 2; do timeout 300 yes > /dev/null & done
+```
+
+> Se lanzan **dos** procesos porque la `t3.micro` tiene **2 vCPU**. Con uno solo, la CPU
+> llega apenas al 50 %.
+
+En la terminal del Learner Lab, repite el ataque del Paso 5.
+
+Vuelve al dashboard. Entre 1 y 2 minutos despues veras:
+
+- El **pico de CPU** en el grafico.
+- La IP atacante sumando intentos en la tabla.
+- La alarma pasando a **rojo** despues de dos minutos sobre 70 %.
+
+Todo en la misma pantalla, junto al runbook que dice que hacer.
+
+## 13) Paso 11 - El dashboard como codigo
+
+**Acciones** > **Ver o editar origen**. Observa:
+
+- Cada widget tiene `x`, `y`, `width` y `height` en una grilla de **24 columnas**. La tabla
+  tiene `"x": 6` porque la CPU ocupa las primeras 6 columnas.
+- El widget de logs lleva la **consulta embebida** en `"query"`.
+- La alarma se referencia por su **ARN**.
+
+Ese JSON se guarda en Git y se despliega con `aws cloudwatch put-dashboard`, Terraform o
+CloudFormation. Igual que cualquier infraestructura como codigo, el panel se vuelve
+reproducible.
+
+Cierra con **Cancelar**, sin cambios.
+
+## 14) Paso 12 - Limpieza
+
+| Que | Por que |
+|---|---|
+| Detener o terminar la instancia | Consume el presupuesto del lab mientras corre |
+| Borrar los paneles que no uses | La capa gratuita incluye **3 dashboards** |
+| Revisar la retencion | Con 14 dias, los logs se borran solos |
+| No ejecutar consultas sobre rangos grandes sin necesidad | Logs Insights cobra por **GB escaneado** |
+
+## 15) Evidencias esperadas
+
+1. Captura del error de Instance Connect **antes** de instalarlo.
+2. Captura de `sshd -T` mostrando `eic_run_authorized_keys`.
+3. Captura de la terminal de Instance Connect funcionando en el navegador.
+4. Captura del grupo `/rhel/secure` con su stream.
+5. Captura de Live Tail con lineas `Invalid user`.
+6. Captura del resultado de **cada una** de las cuatro consultas.
+7. Captura de la retencion en **2 semanas (14 dias)**.
+8. Captura del dashboard **durante la correlacion**: pico de CPU, tabla de IPs y alarma en rojo.
+9. Respuesta: en tu dashboard, que IP ataco, cuantos intentos registro y cuanto subio la CPU?
+
+## 16) Troubleshooting
 
 | Sintoma | Causa probable | Que hacer |
 |---|---|---|
-| No aparece `CWAgent` | El agente no esta corriendo | Revisar el Paso 8 de [Act3-2](../Act3-2) |
-| No aparece el disco en `InstanceId` | El disco tiene mas dimensiones | Buscarlo en **InstanceId, device, fstype, path** |
-| El disco aparece como `--` | Se busco la metrica `used_percent` | El nombre real es **`disk_used_percent`** |
-| *You have to set the gauge range* | Medidor sin rango | **Opciones** > Rango del medidor 0-100 |
-| El titulo dice el nombre del widget anterior | La consola reutiliza el titulo | Renombrarlo con el lapiz antes de crear |
-| El panel quedo vacio al volver | No se guardo | Repetir y presionar **Guardar** |
+| Instance Connect sigue fallando despues de instalar | El `AuthorizedKeysCommand` no quedo activo | Revisar `sshd -T` y el archivo en `sshd_config.d`, reiniciar `sshd` |
+| `sshd -t` muestra un error | Archivo de configuracion mal escrito | Corregirlo **antes** de reiniciar `sshd` |
+| No aparece el grupo `/rhel/secure` | El agente no recargo la configuracion | Repetir `fetch-config` y revisar el log del agente |
+| No hay lineas `Failed password` | Las instancias de AWS no aceptan contrasenia | Filtrar por `Invalid user` |
+| Llegan menos de 40 intentos | Penalizacion de OpenSSH a la IP | Es esperado: lo importante es el patron |
+| La consulta 4 no devuelve IPs | El texto del `parse` no coincide | Copiar el texto exacto de una linea real del log |
+| La consulta da error al ejecutar | Se borro la linea `SOURCE` | Volver a elegir el grupo en **Alcance de la consulta** |
+| La alarma no se pone roja | Solo un proceso `yes`, o aun no pasan 2 minutos | Lanzar los dos procesos y esperar |
 
-## 13) Checklist de verificacion
+## 17) Checklist de verificacion
 
-- [ ] Panel `Panel-Alumnos-RHEL` creado.
-- [ ] Widget Numero de CPU desde `AWS/EC2`.
-- [ ] Widget Numero de RAM desde `CWAgent`.
-- [ ] Widget Medidor de disco con rango 0-100.
-- [ ] Widget Linea con CPU y RAM y periodo de 1 minuto.
-- [ ] Widget Linea con `NetworkIn` y `NetworkOut`.
-- [ ] Todos los widgets con titulo legible.
-- [ ] Panel guardado.
+- [ ] Instance Connect fallando en Red Hat, y explicado por que.
+- [ ] Paquetes `ec2-instance-connect` y `ec2-instance-connect-selinux` instalados.
+- [ ] `AuthorizedKeysCommand` activo y comprobado con `sshd -T`.
+- [ ] Conexion por Instance Connect desde la consola.
+- [ ] Seccion `logs` agregada al agente y recargada.
+- [ ] Grupo `/rhel/secure` con el stream de la instancia.
+- [ ] Ataque generado y visto en Live Tail.
+- [ ] Cuatro consultas de Logs Insights ejecutadas, la ultima guardada.
+- [ ] Retencion en 14 dias.
+- [ ] Alarma `CPU-alta-RHEL` creada (1 minuto, > 70, 2 de 2).
+- [ ] Dashboard con CPU, tabla de IPs, alarma y runbook, guardado.
+- [ ] Correlacion lograda: pico de CPU, IP atacante y alarma en rojo en la misma pantalla.
+- [ ] JSON del dashboard revisado: coordenadas y consulta embebida.
+- [ ] Recursos limpiados al terminar.

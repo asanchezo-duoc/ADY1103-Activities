@@ -11,10 +11,9 @@ Cada actividad vive en su propia carpeta, organizada por unidad/evaluación:
 | [`EA2/Act2-2`](./EA2/Act2-2) | Dashboards de Grafana: data source de Prometheus, dashboard de servidores y dashboard de la API (ServerB), carga de historia sintetica y exportacion a JSON. |
 | [`EA2/Act2-3`](./EA2/Act2-3) | ServerC, Node Exporter y PromQL en profundidad: nuevo servidor observado por pull, catalogo de metricas del sistema operativo, exploracion con Grafana Explore, funciones de tasa y agregacion. |
 | [`EA2/Act2-4`](./EA2/Act2-4) | Dashboards de la comunidad de Grafana: buscar y evaluar tableros del catalogo publico, importarlos por ID, diagnosticar por que no muestran tus datos y adaptarlos a los labels del stack propio. |
-| [`EA3/Act3-1`](./EA3/Act3-1) | Aprovisionamiento de la plataforma del caso Andys Motors en AWS con Terraform y Docker: infraestructura como codigo, ciclo plan/apply/destroy y contraste entre CloudWatch y un stack de observabilidad propio. |
-| [`EA3/Act3-2`](./EA3/Act3-2) | CloudWatch Agent en Red Hat: instancia con rol LabRole y monitoreo detallado, instalacion y configuracion del agente con JSON, revision de sus logs y metricas de RAM y disco que EC2 no ve. |
-| [`EA3/Act3-3`](./EA3/Act3-3) | Primer dashboard de CloudWatch, paso a paso: widgets de numero, medidor y linea con metricas de `AWS/EC2` y `CWAgent`. |
-| [`EA3/Act3-4`](./EA3/Act3-4) | Del log al dashboard: EC2 Instance Connect en Red Hat, CloudWatch Logs, Logs Insights, retencion, alarma y correlacion de un ataque SSH con la CPU en un solo panel. |
+| [`EA3/Act3-1`](./EA3/Act3-1) | CloudWatch Agent en Red Hat: instancia con rol LabRole y monitoreo detallado, instalacion y configuracion del agente con JSON, revision de sus logs y metricas de RAM y disco que EC2 no ve. |
+| [`EA3/Act3-2`](./EA3/Act3-2) | Primer dashboard de CloudWatch, paso a paso: widgets de numero, medidor y linea con metricas de `AWS/EC2` y `CWAgent`. |
+| [`EA3/Act3-3`](./EA3/Act3-3) | Del log al dashboard: EC2 Instance Connect en Red Hat, CloudWatch Logs, Logs Insights, retencion, alarma y correlacion de un ataque SSH con la CPU en un solo panel. |
 
 Cada carpeta de actividad incluye su propio `README.md` con la guía paso a paso para
 desarrollarla.
