@@ -4,7 +4,7 @@ Guia paso a paso para llevar el log de autenticacion de un servidor Red Hat hast
 **dashboard de CloudWatch** que muestre, al mismo tiempo, un ataque SSH y el consumo de CPU
 de la maquina.
 
-> **Video de la actividad**: _(enlace pendiente)_
+> **Video de la actividad**: disponible en AVA.
 
 > **Depende de [EA3/Act3-1](../Act3-1)**: se asume que tienes la instancia Red Hat corriendo,
 > con el CloudWatch Agent instalado y enviando metricas.

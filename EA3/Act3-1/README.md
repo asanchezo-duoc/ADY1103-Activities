@@ -4,7 +4,7 @@ Guia paso a paso para levantar un servidor **Red Hat Enterprise Linux** en el **
 Learner Lab**, instalarle el **agente de CloudWatch** y hacer que envie metricas que EC2 no
 puede ver por si solo, como la memoria RAM y el porcentaje de disco usado.
 
-> **Video de la actividad**: _(enlace pendiente)_
+> **Video de la actividad**: disponible en AVA.
 
 ## Indice
 

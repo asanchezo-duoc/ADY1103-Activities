@@ -3,7 +3,7 @@
 Guia paso a paso para construir **a mano**, widget por widget, un panel de CloudWatch con la
 CPU, la RAM, el disco y la red del servidor Red Hat de la actividad anterior.
 
-> **Video de la actividad**: _(enlace pendiente)_
+> **Video de la actividad**: disponible en AVA.
 
 > **Depende de [EA3/Act3-1](../Act3-1)**: se asume que tienes la instancia Red Hat corriendo,
 > con el CloudWatch Agent enviando metricas al namespace `CWAgent`.
