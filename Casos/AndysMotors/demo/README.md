@@ -174,6 +174,12 @@ reconstruir el recorrido completo de una petición.
 docker compose logs -f agenda-api | grep '"nivel":"warn"'
 ```
 
+Además, si la variable `LOG_DIR` está definida, cada plataforma escribe las mismas líneas en
+`LOG_DIR/<servicio>.log`. Los Compose del caso la definen como `/var/log/andysmotors` y montan
+esa carpeta en la misma ruta del host, así que un agente instalado en el servidor (por ejemplo,
+el CloudWatch Agent) puede leer `web.log`, `stock.log`, `agenda.log`, `crm.log`, `pagos.log` y
+`gateway.log` sin pasar por Docker. Para montar otra carpeta del host, define `LOG_HOST_DIR`.
+
 ### 4.5 Lo que el entorno NO expone
 
 Deliberadamente faltan, porque instalarlos es parte del trabajo:

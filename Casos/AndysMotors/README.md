@@ -98,6 +98,13 @@ caliente.
 Se levanta con Docker Compose, en una máquina o repartido en seis servidores. **No incluye
 Prometheus ni Grafana**: expone la telemetría, y el stack de monitoreo se construye encima.
 
+Para levantarlo a mano en EC2, comando por comando desde el `git clone`:
+
+| Manual | Cuándo usarlo |
+|---|---|
+| [Manual 1: un solo servidor](./manuales/01-un-servidor.md) | Todo el entorno en una instancia. Recomendado para la Evaluación Parcial 3 |
+| [Manual 2: varios servidores](./manuales/02-varios-servidores.md) | Una instancia por plataforma, como describe el caso, o una variante con tres |
+
 ## Infraestructura del caso
 
 La carpeta [`infra/`](./infra) contiene el código **Terraform** que levanta esta misma

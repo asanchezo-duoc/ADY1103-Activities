@@ -3,13 +3,15 @@ services:
     image: andys-motors:local
     container_name: andys-server-gateway
     restart: unless-stopped
-    environment: { SERVICIO: gateway, PORT: 8086, DB_HOST: host.docker.internal, DB_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab }
+    environment: { SERVICIO: gateway, PORT: 8086, DB_HOST: host.docker.internal, DB_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab, LOG_DIR: /var/log/andysmotors }
     extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes: ["${LOG_HOST_DIR:-/var/log/andysmotors}:/var/log/andysmotors"]
     ports: ["8086:8086"]
   pagos:
     image: andys-motors:local
     container_name: andys-server-pagos
     restart: unless-stopped
-    environment: { SERVICIO: pagos, PORT: 8085, GATEWAY_HOST: host.docker.internal, GATEWAY_PORT: 8086, DB_HOST: host.docker.internal, DB_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab }
+    environment: { SERVICIO: pagos, PORT: 8085, GATEWAY_HOST: host.docker.internal, GATEWAY_PORT: 8086, DB_HOST: host.docker.internal, DB_PORT: 5433, DB_NAME: andysmotors, DB_USER: andysadmin, DB_PASSWORD: cambiame, ANDYS_ADMIN_TOKEN: andys-lab, LOG_DIR: /var/log/andysmotors }
     extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes: ["${LOG_HOST_DIR:-/var/log/andysmotors}:/var/log/andysmotors"]
     ports: ["8085:8085"]

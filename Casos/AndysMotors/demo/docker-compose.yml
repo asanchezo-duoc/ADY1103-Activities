@@ -39,6 +39,11 @@ x-api: &api
     DB_NAME: ${DB_NAME:-andysmotors}
     DB_USER: ${DB_USER:-andysadmin}
     DB_PASSWORD: ${DB_PASSWORD:-cambiame}
+    # Cada plataforma escribe ademas sus logs en LOG_DIR/<servicio>.log. La
+    # carpeta se monta en el host para que el CloudWatch Agent los lea.
+    LOG_DIR: /var/log/andysmotors
+  volumes:
+    - ${LOG_HOST_DIR:-/var/log/andysmotors}:/var/log/andysmotors
   networks: [andys]
 
 services:
